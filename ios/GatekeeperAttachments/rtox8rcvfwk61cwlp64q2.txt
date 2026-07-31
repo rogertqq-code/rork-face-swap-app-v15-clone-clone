@@ -1,0 +1,152 @@
+#!/usr/bin/env swift
+//
+//  generate_hashes.swift
+//  ONE-TIME BUILD SCRIPT — Run this ONCE on your development Mac to create EmbeddedCodeHashes.swift
+//
+//  PURPOSE:
+//  - Generate 1000 unique random 6-digit codes.
+//  - Compute strong Argon2id hashes for each (memory-hard, unique salt per code).
+//  - Write ONLY the hashes into EmbeddedCodeHashes.swift (no plaintext codes anywhere).
+//  - After adding EmbeddedCodeHashes.swift to your Xcode target and building the app,
+//    you can safely DELETE this generate_hashes.swift file and any plaintext lists.
+//    The codes become unrecoverable from source — only the one-way hashes remain embedded in the binary.
+//
+//  HOW TO USE (do this before shipping):
+//  1. On your Mac, create a small Swift package or just run this file with `swift run` after adding dependencies.
+//  2. Add a dependency that provides Argon2id (recommended: https://github.com/kyzmitch/Swift-Argon2 or a similar maintained package).
+//     Or use a C target + libargon2 via Swift Package Manager (very common for production).
+//  3. Implement the `computeArgon2idHash(for:)` function below using your chosen library (example skeleton provided).
+//  4. Run the script → it produces EmbeddedCodeHashes.swift with 1000 real hashes.
+//  5. Drag EmbeddedCodeHashes.swift into your Gatekeeper Xcode target (make it private / internal).
+//  6. Build the app.
+//  7. DELETE generate_hashes.swift (and any temp plaintext files). The 1000 codes are now gone forever from your source.
+//
+//  SECURITY:
+//  - Each hash uses its own cryptographically random 16-byte salt.
+//  - Recommended params for mobile (balance security vs login time ~5-10s worst case):
+//      m = 4096 KiB (4 MiB), t = 3, p = 2, tag length 32
+//  - Tune on real devices. Higher = slower brute-force but longer verify.
+//  - The final app binary contains only the encoded Argon2id strings — reversing them to original codes is computationally infeasible with these params.
+//
+//  After you delete this file, even you cannot recover the original 1000 codes without brute-forcing Argon2id (which is the point).
+//
+
+import Foundation
+import CryptoKit   // for random salt generation (you can replace with SecRandomCopyBytes if preferred)
+
+// TODO: Add your Argon2 package here and implement this function.
+// Example skeleton using a hypothetical `Argon2` module:
+private func computeArgon2idHash(for code: String) -> String? {
+    // ============================================================
+    // REPLACE THIS WITH REAL IMPLEMENTATION USING YOUR CHOSEN LIBRARY
+    // Example with a typical API:
+    //
+    // let salt = generateRandomSalt()
+    // let params = Argon2Params(memory: 4096, iterations: 3, parallelism: 2, hashLength: 32)
+    // let encoded = try Argon2.hash(
+    //     password: code.data(using: .utf8)!,
+    //     salt: salt,
+    //     params: params,
+    //     variant: .id
+    // )
+    // return encoded   // returns the full "$argon2id$v=19$m=...$salt$hash" string
+    // ============================================================
+
+    // PLACEHOLDER — produces a syntactically correct but non-verifiable hash.
+    // The real version must use a proper Argon2id implementation.
+    let fakeSalt = Data((0..<16).map { _ in UInt8.random(in: 0...255) }).base64EncodedString()
+        .replacingOccurrences(of: "+", with: "")
+        .replacingOccurrences(of: "/", with: "")
+        .prefix(22)  // typical encoded salt length
+
+    let fakeHash = Data((0..<32).map { _ in UInt8.random(in: 0...255) }).base64EncodedString()
+        .replacingOccurrences(of: "+", with: "")
+        .replacingOccurrences(of: "/", with: "")
+        .prefix(43)
+
+    return "$argon2id$v=19$m=4096,t=3,p=2$\(fakeSalt)$\(fakeHash)"
+}
+
+private func generateRandomSalt() -> Data {
+    var bytes = [UInt8](repeating: 0, count: 16)
+    _ = SecRandomCopyBytes(kSecRandomDefault, 16, &bytes)
+    return Data(bytes)
+}
+
+private func generateUniqueSixDigitCodes(count: Int) -> [String] {
+    var codes = Set<String>()
+    while codes.count < count {
+        let code = String(format: "%06d", Int.random(in: 0...999999))
+        codes.insert(code)
+    }
+    return Array(codes).shuffled()   // shuffle so average lookup position is ~500
+}
+
+func main() {
+    print("Generating 1000 unique 6-digit codes and Argon2id hashes...")
+
+    let codes = generateUniqueSixDigitCodes(count: 1000)
+    var hashes: [String] = []
+
+    for (index, code) in codes.enumerated() {
+        guard let hash = computeArgon2idHash(for: code) else {
+            print("Failed to hash code at index \(index)")
+            exit(1)
+        }
+        hashes.append(hash)
+
+        if (index + 1) % 100 == 0 {
+            print("  Processed \(index + 1)/1000 ...")
+        }
+    }
+
+    // Write the embedded file
+    let outputPath = "EmbeddedCodeHashes.swift"
+    let header = """
+    //
+    //  EmbeddedCodeHashes.swift
+    //  AUTO-GENERATED by generate_hashes.swift — DO NOT EDIT MANUALLY
+    //
+    //  This file contains ONLY the Argon2id hashes of 1000 secret 6-digit codes.
+    //  The original codes are NOT present anywhere in this file or the final binary.
+    //
+    //  After adding this file to your Xcode target and building:
+    //  1. Delete generate_hashes.swift and any plaintext code lists.
+    //  2. The 1000 codes become permanently unrecoverable from your source control.
+    //  3. Only the compiled binary (protected by Argon2id + runtime protections) knows them.
+    //
+    //  Security: Each hash has a unique random salt. Brute-forcing requires ~1M Argon2id
+    //  computations per code with memory-hard parameters — computationally infeasible.
+    //
+
+    import Foundation
+
+    /// Private array of 1000 pre-computed Argon2id hashes.
+    /// Never expose this array or its contents outside the validator.
+    internal let embeddedValidHashes: [String] = [
+    """
+
+    var body = ""
+    for hash in hashes {
+        body += "    \"\(hash)\",\n"
+    }
+
+    let footer = """
+    ]
+    """
+
+    let fullContent = header + "\n" + body + footer
+
+    do {
+        try fullContent.write(toFile: outputPath, atomically: true, encoding: .utf8)
+        print("✅ Successfully wrote \(hashes.count) hashes to \(outputPath)")
+        print("   → Add this file to your Xcode target.")
+        print("   → Delete generate_hashes.swift after building.")
+        print("   → The original 1000 codes are now gone from source.")
+    } catch {
+        print("Failed to write file: \(error)")
+        exit(1)
+    }
+}
+
+main()

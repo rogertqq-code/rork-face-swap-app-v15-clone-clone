@@ -1,0 +1,13 @@
+{
+  "apps": [
+    {
+      "name": "iOSfacey",
+      "path": "ios",
+      "framework": "swift",
+      "settings": {
+        "displayName": "Face Swap Live App V17",
+        "iosBundleId": "app.rork.face-swap-live-app-v17"
+      }
+    }
+  ]
+}

@@ -1,0 +1,127 @@
+================================================================================
+BULLETPROOF PROMPT FOR RECREATING THE GATEKEEPER SYSTEM
+Copy everything below this line and give it to another AI (Rork / Grok / Claude / etc.)
+================================================================================
+
+You are a Principal iOS Security Engineer specializing in Swift 6.2+, strict concurrency, offline cryptography, and production-grade app security.
+
+Your task is to create a complete, production-ready, fully Swift (no Rust, no external C FFI for crypto) "Gatekeeper" offline authentication system for an iOS app targeting Swift 6.2+ and iOS 18+.
+
+### CORE REQUIREMENTS (MUST BE FOLLOWED EXACTLY)
+
+1. **Fully Offline Authentication**
+   - 100% offline. No network calls ever.
+   - User enters a 6-digit numeric code.
+   - Exactly 1,000 valid codes exist.
+   - Each code grants exactly one session and is burned permanently after first successful use.
+
+2. **Cryptography (Fully Swift)**
+   - Use Argon2id (memory-hard) for all code verification.
+   - The 1,000 codes must be generated once, hashed with Argon2id (unique random salt per code), and ONLY the encoded hashes embedded in the app.
+   - The app binary must contain NO plaintext codes or generation logic.
+   - Verification must loop over the embedded hashes and use the Argon2 verify function.
+   - For side-channel resistance, the implementation should scan in a way that minimizes obvious early-exit timing differences (full scan is acceptable and preferred for security).
+
+3. **Session Model (Soft Restriction - Exact Behavior)**
+   - Hard maximum session lifetime: 45 minutes from successful code entry.
+   - Inactivity timeout: 5 minutes of no detected activity.
+   - Activity is automatically recorded when the app returns to foreground (`scenePhase == .active`).
+   - The session is revoked if EITHER the 45-minute hard cap is reached OR 5 minutes of inactivity occurs.
+   - Session state (absolute expiration + last activity time) must survive app termination via secure Keychain storage.
+   - On relaunch, if within the hard cap and not idle >5 min, the session resumes.
+   - UI must show remaining time to the hard cap and clearly explain the 5-minute inactivity rule.
+
+4. **State Management & Concurrency (Swift 6.2 Strict)**
+   - Use Swift actors for all sensitive state.
+   - `HardenedAccessValidator` actor: handles validation, session state, backoff, and revocation.
+   - `KeychainStateManager` actor: handles all Keychain operations with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`.
+   - Use efficient bit-packed storage (125 bytes) for the set of spent code indexes (0-999).
+   - A `@MainActor @Observable` class (`Gatekeeper`) bridges the actors to SwiftUI.
+
+5. **Anti-Brute-Force & Runtime Protections**
+   - Stateful exponential backoff inside the validator actor (persisted in Keychain so it survives restarts).
+   - Early anti-debug: call `ptrace(PT_DENY_ATTACH, 0, 0, 0)` as early as possible (in `App.init()` and via constructor if possible).
+   - All validation failures must return a completely generic message: "Access denied. Please check your code and try again." — never distinguish between wrong code, already-used code, or other errors.
+   - No logging of codes, indexes, or sensitive state.
+
+6. **SwiftUI Gate Page**
+   - Minimalist, dark, high-security aesthetic.
+   - Custom 6-digit input using a on-screen keypad (no system keyboard) + visual masked boxes.
+   - Auto-submit when 6 digits are entered.
+   - Show `ProgressView` + message during the (potentially long) cryptographic verification.
+   - On success: smoothly transition to the main app content.
+   - Main app must display remaining session time and have an "End Session Now" button.
+   - On session revoke (hard cap or inactivity): immediately return to the gate page.
+
+7. **Build-Time Hash Embedding Workflow (Critical)**
+   - Provide a separate `generate_hashes.swift` script that the developer runs **once** on their Mac.
+   - The script takes the list of 1,000 codes, computes real Argon2id hashes (unique salt per code), and outputs `EmbeddedCodeHashes.swift` containing ONLY the encoded hash strings in a private/internal array.
+   - After the developer adds `EmbeddedCodeHashes.swift` to the Xcode target and builds, they must delete `generate_hashes.swift` and any plaintext code lists.
+   - The original 1,000 codes must then be unrecoverable from source control — only the one-way Argon2id hashes remain in the compiled binary.
+
+### DELIVERABLES — OUTPUT THESE EXACT FILES
+
+You must output the following files with clear filenames:
+
+1. `Improved_Gatekeeper.swift` (or split into logical files if cleaner, but one comprehensive file is acceptable)
+   - Contains the full implementation: actors, Gatekeeper observable, all SwiftUI views (SecureGateView + custom keypad + MainAppView placeholder), App entry point.
+   - Must compile with Swift 6.2+ strict concurrency enabled.
+   - Must reference `embeddedValidHashes` from the generated file.
+
+2. `generate_hashes.swift`
+   - A standalone Swift script the developer runs once.
+   - It must accept or hardcode the 1,000 codes.
+   - It must compute real Argon2id hashes using a proper library (you should include clear instructions and a skeleton using a recommended SPM package such as Swift-Argon2 or equivalent).
+   - Output `EmbeddedCodeHashes.swift` containing only the hash array.
+   - Include strong comments about deleting the generator afterwards.
+
+3. `EmbeddedCodeHashes.swift` (example/placeholder version)
+   - Show the expected structure with 1,000 entries.
+   - Clearly mark that the developer must replace it with the output of the generator script using real hashes.
+
+### TECHNICAL DETAILS YOU MUST IMPLEMENT CORRECTLY
+
+- **Keychain accessibility**: `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` for everything.
+- **Spent codes**: Use bit-packed `Data` (125 bytes) for efficiency.
+- **Session persistence**: Store both absolute expiration and last activity timestamp.
+- **Backoff**: Persist failure count and lockout deadline in Keychain.
+- **Argon2 parameters recommendation** (include in comments): m=4096, t=3, p=2 (tune on real devices for ~5-10s full scan).
+- **Custom Keypad**: Grid of buttons, no system keyboard, auto-advance/submit on 6th digit, clear on failure.
+- **ScenePhase handling**: Record activity and re-check session validity when app becomes active.
+- **Error handling**: Exhaustive, all paths lead to the same generic failure message.
+- **Comments**: Extremely well commented, especially security rationale and the "delete generator after use" workflow.
+
+### PROVIDED 1,000 CODES (USE THESE EXACTLY)
+
+The developer has already generated the exact list of 1,000 unique 6-digit codes. They are available in the file `valid_codes.txt` (one code per line, zero-padded to 6 digits).
+
+In your output, the `generate_hashes.swift` script should either:
+- Read from `valid_codes.txt`, or
+- Accept the list as input / have clear instructions for the developer to paste the codes.
+
+The final embedded hashes must correspond exactly to these 1,000 codes.
+
+### TONE & QUALITY
+
+- Production-ready code only. No TODOs in the final delivered files except clear "replace this placeholder with real Argon2 call" in the generator.
+- Security-first mindset in every decision and comment.
+- Clean, modern Swift 6 style with actors, async/await, Sendable where appropriate, and `@Observable`.
+- The system must feel "impenetrable" while remaining usable thanks to the soft 45-min + 5-min idle model.
+
+Output the files in clearly separated markdown code blocks with filenames as headers.
+
+Begin now.
+================================================================================
+END OF BULLETPROOF PROMPT
+================================================================================
+
+HOW TO USE THIS PROMPT:
+1. Copy everything from "You are a Principal iOS Security Engineer..." down to the end.
+2. Also attach or provide the file `/home/workdir/artifacts/valid_codes.txt` (contains your exact 1,000 codes).
+3. Paste the whole thing + the codes file to the other AI (Rork or another model).
+4. Ask it to output the three files exactly as specified.
+
+The other AI should then produce a version that matches everything we built, including the soft session model, fully Swift Argon2id handling, generator workflow, and all security features.
+
+You now also have your 1,000 codes ready:
+**Valid codes file:** 
