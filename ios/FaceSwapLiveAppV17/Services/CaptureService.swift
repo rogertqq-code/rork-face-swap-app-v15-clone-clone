@@ -4,15 +4,7 @@ import UIKit
 @globalActor
 actor CaptureSessionActor {
     static let shared = CaptureSessionActor()
-    
-    nonisolated let unownedExecutor: UnownedSerialExecutor
-    let queue: DispatchQueue
-    
-    init() {
-        let q = DispatchQueue(label: "com.app.capturesession")
-        self.queue = q
-        self.unownedExecutor = q.asUnownedSerialExecutor()
-    }
+    nonisolated let queue = DispatchQueue(label: "com.app.capturesession")
 }
 
 nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate, @unchecked Sendable {

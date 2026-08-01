@@ -112,16 +112,9 @@ nonisolated struct NativeWebRTCSignalEvent: Codable, Sendable, Hashable, Identif
 nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate, @unchecked Sendable {
     typealias EventSink = @Sendable (NativeWebRTCSignalEvent) -> Void
 
-    private static let factory: RTCPeerConnectionFactory = {
-        RTCInitializeSSL()
-        return RTCPeerConnectionFactory(
-            encoderFactory: RTCDefaultVideoEncoderFactory(),
-            decoderFactory: RTCDefaultVideoDecoderFactory()
-        )
-    }()
-
     let requestID: UUID
 
+    private let factory: RTCPeerConnectionFactory
     private let peerConnection: RTCPeerConnection
     private let videoSource: RTCVideoSource
     private let videoCapturer: RTCVideoCapturer
@@ -140,6 +133,12 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
     ) throws {
         self.requestID = requestID
         self.eventSink = eventSink
+        RTCInitializeSSL()
+        let factory = RTCPeerConnectionFactory(
+            encoderFactory: RTCDefaultVideoEncoderFactory(),
+            decoderFactory: RTCDefaultVideoDecoderFactory()
+        )
+        self.factory = factory
 
         let configuration = RTCConfiguration()
         configuration.sdpSemantics = .unifiedPlan
@@ -150,7 +149,7 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
             mandatoryConstraints: nil,
             optionalConstraints: ["DtlsSrtpKeyAgreement": kRTCMediaConstraintsValueTrue]
         )
-        guard let peerConnection = Self.factory.peerConnection(
+        guard let peerConnection = factory.peerConnection(
             with: configuration,
             constraints: peerConstraints,
             delegate: nil
@@ -159,7 +158,7 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
         }
         self.peerConnection = peerConnection
 
-        let videoSource = Self.factory.videoSource()
+        let videoSource = factory.videoSource()
         if let dimensions {
             videoSource.adaptOutputFormat(
                 toWidth: Int32(dimensions.width),
@@ -169,16 +168,16 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
         }
         self.videoSource = videoSource
         self.videoCapturer = RTCVideoCapturer(delegate: videoSource)
-        self.localVideoTrack = Self.factory.videoTrack(
+        self.localVideoTrack = factory.videoTrack(
             with: videoSource,
             trackId: "fsl-native-video-\(requestID.uuidString)"
         )
 
         if includeRealAudio {
-            let audioSource = Self.factory.audioSource(
+            let audioSource = factory.audioSource(
                 with: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
             )
-            self.localAudioTrack = Self.factory.audioTrack(
+            self.localAudioTrack = factory.audioTrack(
                 with: audioSource,
                 trackId: "fsl-native-audio-\(requestID.uuidString)"
             )
