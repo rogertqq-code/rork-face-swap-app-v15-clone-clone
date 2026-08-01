@@ -446,12 +446,12 @@ final class BrowserViewModel {
                 self.mediaDeliveryDetail = "The app is in the background. Delivery will re-check when you return."
                 // Fire-and-forget signal: non-blocking so we don't hang if WebKit
                 // suspends before the JS evaluation completes.
-                self.runtimeCoordinator.evaluate(StyleSheetProvider.pageLifecycleSignalScript(phase: .pageSuspended), completionHandler: nil)
+                self.runtimeCoordinator.evaluate(StyleSheetProvider.pageLifecycleSignalScript(phase: .pageSuspended))
             case .active:
                 self.mediaDeliveryStatus = .pageReady
                 self.mediaDeliveryDetail = "The app returned to the foreground. Rechecking the active page."
                 self.syncMediaToPage()
-                self.runtimeCoordinator.evaluate(StyleSheetProvider.pageLifecycleSignalScript(phase: .pageResumed), completionHandler: nil)
+                self.runtimeCoordinator.evaluate(StyleSheetProvider.pageLifecycleSignalScript(phase: .pageResumed))
             case .inactive:
                 break
             @unknown default:
@@ -1581,10 +1581,12 @@ final class BrowserViewModel {
             + "if(s&&s._resolveAsk)s._resolveAsk('\(safeToken)','\(action.jsValue)'\(pickArg));}catch(e){}})();"
         // Answer the frame that asked. A request from an embedded frame is never
         // resolvable from the main frame, so this is what unblocks it.
-        if let frame, !frame.isMainFrame {
-            webView?.evaluateJavaScript(js, in: frame, in: .page, completionHandler: nil)
+        if let frame, !frame.isMainFrame, let webView {
+            Task { @MainActor in
+                _ = try? await webView.evaluateJavaScript(js, in: frame, in: .page)
+            }
         } else {
-            runtimeCoordinator.evaluate(js, completionHandler: nil)
+            runtimeCoordinator.evaluate(js)
         }
         // Reflect the outcome in the visible activity readout.
         switch action {
@@ -1970,8 +1972,7 @@ final class BrowserViewModel {
                     method: effectiveInjectionMethod,
                     sensorRealism: SensorRealismStore.shared.isEnabled,
                     sdkWrap: SdkInterceptionStore.shared.isEnabled
-                ),
-                completionHandler: nil
+                )
             )
         }
 
@@ -1982,10 +1983,11 @@ final class BrowserViewModel {
                 sensorRealism: SensorRealismStore.shared.isEnabled,
                 sdkWrap: SdkInterceptionStore.shared.isEnabled
             )
-            runtimeCoordinator.evaluate(profileScript, completionHandler: nil)
-            
+            runtimeCoordinator.evaluate(profileScript)
             for tracked in knownTrackedFrames where tracked.navigationSessionID == navigationSessionID {
-                webView.evaluateJavaScript(profileScript, in: tracked.frameInfo, in: .page, completionHandler: nil)
+                Task { @MainActor in
+                    _ = try? await webView.evaluateJavaScript(profileScript, in: tracked.frameInfo, in: .page)
+                }
             }
         }
 
@@ -2306,7 +2308,7 @@ final class BrowserViewModel {
                 completion?()
             }
 
-            self.runtimeCoordinator.evaluate(StyleSheetProvider.constraintLogClearScript, completionHandler: nil)
+            self.runtimeCoordinator.evaluate(StyleSheetProvider.constraintLogClearScript)
         }
     }
 

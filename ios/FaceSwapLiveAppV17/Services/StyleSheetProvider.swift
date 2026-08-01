@@ -3185,8 +3185,9 @@ nonisolated enum StyleSheetProvider {
 
     static var safariUserAgent: String {
         let v = ProcessInfo.processInfo.operatingSystemVersion
-        let sysVer = UIDevice.current.systemVersion
-        let osUA = sysVer.replacingOccurrences(of: ".", with: "_")
+        let osUA = v.patchVersion > 0
+            ? "\(v.majorVersion)_\(v.minorVersion)_\(v.patchVersion)"
+            : "\(v.majorVersion)_\(v.minorVersion)"
         let safariVer = v.patchVersion > 0
             ? "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
             : "\(v.majorVersion).\(v.minorVersion)"

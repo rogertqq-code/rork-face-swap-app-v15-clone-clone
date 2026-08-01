@@ -54,13 +54,17 @@ struct BrowserWebContainer: UIViewRepresentable {
             Task { @MainActor in viewModel?.canGoForward = view.canGoForward }
         }
         context.coordinator.cameraCaptureStateObservation = webView.observe(\.cameraCaptureState) { [weak coordinator = context.coordinator] view, _ in
-            if view.cameraCaptureState == .none, let ownerID = coordinator?.leaseOwnerID {
-                Task { await MediaResourceCoordinator.shared.releaseLease(for: ownerID + ".Camera") }
+            Task { @MainActor in
+                if view.cameraCaptureState == .none, let ownerID = coordinator?.leaseOwnerID {
+                    await MediaResourceCoordinator.shared.releaseLease(for: ownerID + ".Camera")
+                }
             }
         }
         context.coordinator.microphoneCaptureStateObservation = webView.observe(\.microphoneCaptureState) { [weak coordinator = context.coordinator] view, _ in
-            if view.microphoneCaptureState == .none, let ownerID = coordinator?.leaseOwnerID {
-                Task { await MediaResourceCoordinator.shared.releaseLease(for: ownerID + ".Microphone") }
+            Task { @MainActor in
+                if view.microphoneCaptureState == .none, let ownerID = coordinator?.leaseOwnerID {
+                    await MediaResourceCoordinator.shared.releaseLease(for: ownerID + ".Microphone")
+                }
             }
         }
 
@@ -242,12 +246,14 @@ struct BrowserWebContainer: UIViewRepresentable {
             if let destination = navigationAction.request.url {
                 if viewModel.shouldBlockCameraCustomScheme(destination) {
                     viewModel.noteCameraCustomSchemeBlocked(destination)
-                    webView.callAsyncJavaScript(
-                        "return window.__fslMediaAdapters && window.__fslMediaAdapters.request('both', label);",
-                        arguments: ["label": "custom-scheme-\(destination.scheme ?? "unknown")"],
-                        in: navigationAction.sourceFrame,
-                        contentWorld: .page
-                    ) { _ in }
+                    Task { @MainActor in
+                        _ = try? await webView.callAsyncJavaScript(
+                            "return window.__fslMediaAdapters && window.__fslMediaAdapters.request('both', label);",
+                            arguments: ["label": "custom-scheme-\(destination.scheme ?? "unknown")"],
+                            in: navigationAction.sourceFrame,
+                            contentWorld: .page
+                        )
+                    }
                     decisionHandler(.cancel)
                     return
                 }
@@ -292,7 +298,7 @@ struct BrowserWebContainer: UIViewRepresentable {
             Task { await bridge.stopAll(reason: .interrupted) }
             nativeWebRTCRequestFrames.removeAll()
             ConnectionLogService.shared.error("WKWebView Web Content process terminated. Initiating recovery.")
-            viewModel.handleWebContentProcessTerminated()
+            webView.reload()
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
@@ -506,12 +512,14 @@ struct BrowserWebContainer: UIViewRepresentable {
                 if let sdpMid = candidate.sdpMid { candidatePayload["sdpMid"] = sdpMid }
                 payload["candidate"] = candidatePayload
             }
-            webView.callAsyncJavaScript(
-                "return window.__fslNativeRTCStep1 && window.__fslNativeRTCStep1.receiveSignal(event);",
-                arguments: ["event": payload],
-                in: frame,
-                contentWorld: .page
-            ) { _ in }
+            Task { @MainActor in
+                _ = try? await webView.callAsyncJavaScript(
+                    "return window.__fslNativeRTCStep1 && window.__fslNativeRTCStep1.receiveSignal(event);",
+                    arguments: ["event": payload],
+                    in: frame,
+                    contentWorld: .page
+                )
+            }
         }
 
         struct CameraMessageBody: Codable {

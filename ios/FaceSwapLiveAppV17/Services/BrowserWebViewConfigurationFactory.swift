@@ -2,6 +2,7 @@ import Foundation
 import WebKit
 
 /// Creates the one stable WebKit configuration shared by browsing and the in-app diagnostics fixture.
+@MainActor
 enum BrowserWebViewConfigurationFactory {
     static let sequenceBridgeName = "fslSeq"
     static let cameraBridgeName = "fslCamera"

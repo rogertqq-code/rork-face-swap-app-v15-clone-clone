@@ -31,7 +31,7 @@ final class PreviewViewModel {
     /// gate is always released.
     nonisolated private let frameState = FrameLoopState()
 
-    func startCapture() {
+    func startCapture() async {
         let processor = self.processor
 
         captureService.onFrame = { [weak self] buffer in
@@ -98,11 +98,11 @@ final class PreviewViewModel {
         isFrontPosition = (captureService.currentPosition == .front)
         activeCameraName = captureService.currentCameraName
 
-        captureService.start()
+        try? await captureService.start()
     }
 
-    func stopCapture() {
-        captureService.stop()
+    func stopCapture() async {
+        await captureService.stop()
     }
 
     func selectSourceImage(_ image: UIImage) {
