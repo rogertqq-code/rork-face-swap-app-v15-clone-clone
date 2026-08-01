@@ -528,33 +528,23 @@ final class SetupService {
             .appendingPathComponent(UUID().uuidString + ".mov")
 
         let result: TestClipResult? = await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                var didResume = false
-                let lock = NSLock()
-
-                func safeResume(_ result: TestClipResult?) {
-                    lock.lock()
-                    guard !didResume else {
-                        lock.unlock()
-                        return
-                    }
-                    didResume = true
-                    lock.unlock()
-                    continuation.resume(returning: result)
-                }
+            await withCheckedContinuation { (continuation: CheckedContinuation<TestClipResult?, Never>) in
+                let guard_ = ResumeGuard(continuation: continuation)
 
                 let recorder = TestClipRecorder(device: device, outputURL: outputURL) { result in
-                    safeResume(result)
+                    guard_.resume(result)
                 }
                 self.activeRecorder = recorder
                 recorder.start()
 
                 DispatchQueue.global().asyncAfter(deadline: .now() + 5.0) {
-                    safeResume(nil)
+                    guard_.resume(nil)
                 }
             }
         } onCancel: { [weak self] in
-            self?.activeRecorder?.stop()
+            Task { @MainActor in
+                self?.activeRecorder?.stop()
+            }
         }
         // Release the recorder once the clip has finished or timed out. Runs back
         // on the main actor after the continuation resumes (the previous
@@ -570,30 +560,23 @@ final class SetupService {
             .appendingPathComponent(UUID().uuidString + ".m4a")
 
         let result: TestAudioResult? = await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                var didResume = false
-                let lock = NSLock()
-
-                func safeResume(_ result: TestAudioResult?) {
-                    lock.lock()
-                    guard !didResume else { lock.unlock(); return }
-                    didResume = true
-                    lock.unlock()
-                    continuation.resume(returning: result)
-                }
+            await withCheckedContinuation { (continuation: CheckedContinuation<TestAudioResult?, Never>) in
+                let guard_ = ResumeGuard(continuation: continuation)
 
                 let recorder = TestAudioRecorder(device: device, outputURL: outputURL) { result in
-                    safeResume(result)
+                    guard_.resume(result)
                 }
                 self.activeAudioRecorder = recorder
                 recorder.start()
 
                 DispatchQueue.global().asyncAfter(deadline: .now() + 3.0) {
-                    safeResume(nil)
+                    guard_.resume(nil)
                 }
             }
         } onCancel: { [weak self] in
-            self?.activeAudioRecorder?.stop()
+            Task { @MainActor in
+                self?.activeAudioRecorder?.stop()
+            }
         }
         // Release the recorder once recording has finished or timed out (the
         // previous assignment here sat after `return await` and was unreachable).
