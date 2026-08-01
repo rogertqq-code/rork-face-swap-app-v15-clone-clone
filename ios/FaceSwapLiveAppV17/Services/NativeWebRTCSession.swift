@@ -130,6 +130,8 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
     private let eventSink: EventSink
     private let stateLock = NSLock()
     private var closed = false
+    private var isRemoteDescriptionSet = false
+    private var pendingIceCandidates: [NativeWebRTCIceCandidate] = []
 
     init(
         requestID: UUID,
@@ -231,6 +233,16 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
                 }
             }
         }
+        
+        stateLock.lock()
+        isRemoteDescriptionSet = true
+        let pending = pendingIceCandidates
+        pendingIceCandidates.removeAll()
+        stateLock.unlock()
+        
+        for candidate in pending {
+            emit(kind: .localCandidate, candidate: candidate)
+        }
     }
 
     func addRemoteCandidate(_ candidate: NativeWebRTCIceCandidate) async throws {
@@ -250,7 +262,13 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
         sampleBuffer: CMSampleBuffer,
         rotation: RTCVideoRotation = ._0
     ) throws {
-        try ensureOpen()
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        
+        if closed {
+            return
+        }
+        
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             throw MediaDeliveryContractError.deliveryFailed("The AVFoundation frame did not contain a pixel buffer.")
         }
@@ -339,7 +357,15 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {}
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
-        emit(kind: .localCandidate, candidate: NativeWebRTCIceCandidate(candidate))
+        let nativeCandidate = NativeWebRTCIceCandidate(candidate)
+        stateLock.lock()
+        if isRemoteDescriptionSet {
+            stateLock.unlock()
+            emit(kind: .localCandidate, candidate: nativeCandidate)
+        } else {
+            pendingIceCandidates.append(nativeCandidate)
+            stateLock.unlock()
+        }
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {}

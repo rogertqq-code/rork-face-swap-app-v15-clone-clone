@@ -60,6 +60,7 @@ struct DiagnosticsHarnessWebView: UIViewRepresentable {
             self.harness = harness
         }
 
+        @MainActor
         func webView(
             _ webView: WKWebView,
             requestMediaCapturePermissionFor origin: WKSecurityOrigin,
@@ -72,6 +73,7 @@ struct DiagnosticsHarnessWebView: UIViewRepresentable {
         }
 
         @available(iOS 18.4, *)
+        @MainActor
         func webView(
             _ webView: WKWebView,
             runOpenPanelWith parameters: WKOpenPanelParameters,
@@ -81,6 +83,7 @@ struct DiagnosticsHarnessWebView: UIViewRepresentable {
             completionHandler(nil)
         }
 
+        @MainActor
         func webView(
             _ webView: WKWebView,
             runJavaScriptAlertPanelWithMessage message: String,
@@ -90,6 +93,7 @@ struct DiagnosticsHarnessWebView: UIViewRepresentable {
             completionHandler()
         }
 
+        @MainActor
         func webView(
             _ webView: WKWebView,
             runJavaScriptConfirmPanelWithMessage message: String,
@@ -99,6 +103,7 @@ struct DiagnosticsHarnessWebView: UIViewRepresentable {
             completionHandler(false)
         }
 
+        @MainActor
         func webView(
             _ webView: WKWebView,
             runJavaScriptTextInputPanelWithPrompt prompt: String,

@@ -58,9 +58,13 @@ nonisolated enum MediaAudioPolicyResolver {
         case .authorized:
             return true
         case .notDetermined:
-            return await withCheckedContinuation { continuation in
-                AVCaptureDevice.requestAccess(for: .audio) { granted in
-                    continuation.resume(returning: granted)
+            if #available(iOS 17.0, *) {
+                return await AVCaptureDevice.requestAccess(for: .audio)
+            } else {
+                return await withCheckedContinuation { continuation in
+                    AVCaptureDevice.requestAccess(for: .audio) { granted in
+                        continuation.resume(returning: granted)
+                    }
                 }
             }
         case .denied, .restricted:

@@ -5,7 +5,7 @@ import WebKit
 @MainActor
 final class WebRuntimeCoordinator {
     private weak var webView: WKWebView?
-    private var pendingEvaluations: [(script: String, completion: ((Any?, Error?) -> Void)?)] = []
+    private var pendingEvaluations: [(script: String, completion: (@Sendable @MainActor (Any?, Error?) -> Void)?)] = []
     private var isEvaluating = false
     
     init(webView: WKWebView? = nil) {
@@ -16,7 +16,7 @@ final class WebRuntimeCoordinator {
         self.webView = webView
     }
     
-    func evaluate(_ script: String, completion: ((Any?, Error?) -> Void)? = nil) {
+    func evaluate(_ script: String, completion: (@Sendable @MainActor (Any?, Error?) -> Void)? = nil) {
         pendingEvaluations.append((script, completion))
         drainQueue()
     }

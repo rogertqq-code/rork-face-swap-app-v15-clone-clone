@@ -65,7 +65,9 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
 
     @available(iOS 17.0, *)
     var rotationCoordinator: AVCaptureDevice.RotationCoordinator? {
-        _rotationCoordinator as? AVCaptureDevice.RotationCoordinator
+        positionLock.lock()
+        defer { positionLock.unlock() }
+        return _rotationCoordinator as? AVCaptureDevice.RotationCoordinator
     }
 
     var videoRotationAngle: CGFloat {
@@ -320,7 +322,9 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         session.addInput(input)
         
         if #available(iOS 17.0, *) {
+            positionLock.lock()
             _rotationCoordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
+            positionLock.unlock()
         }
         
         return true

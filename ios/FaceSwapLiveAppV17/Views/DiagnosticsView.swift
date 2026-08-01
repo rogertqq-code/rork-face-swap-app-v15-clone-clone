@@ -699,17 +699,22 @@ struct DiagnosticsView: View {
             }
             .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.movie, .video, .quickTimeMovie]) { result in
                 if case .success(let url) = result {
-                    selectedMediaURL = url
+                    Task { @MainActor in
+                        selectedMediaURL = url
+                    }
                     Task {
                         // Files from the system picker live outside the sandbox
                         // and need security-scoped access held open for the whole
                         // read, or inspection intermittently fails.
                         let scoped = url.startAccessingSecurityScopedResource()
                         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                        mediaReport = await DiagnosticsService.inspectMediaFile(at: url)
-                        if let report = mediaReport,
-                           let camera = profileManager.activeProfile?.frontCamera {
-                            conformanceScore = DiagnosticsService.scoreConformance(media: report, camera: camera)
+                        let report = await DiagnosticsService.inspectMediaFile(at: url)
+                        Task { @MainActor in
+                            mediaReport = report
+                            if let report = mediaReport,
+                               let camera = profileManager.activeProfile?.frontCamera {
+                                conformanceScore = DiagnosticsService.scoreConformance(media: report, camera: camera)
+                            }
                         }
                     }
                 }

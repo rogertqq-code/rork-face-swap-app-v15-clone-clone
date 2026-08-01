@@ -2199,10 +2199,11 @@ nonisolated enum StyleSheetProvider {
     // payloads. Active replacements are serialized so two quick toolbar taps
     // cannot build overlapping feeds; progress is published only after the new
     // stream is ready and rebound.
-    _s._setPointer=function(ptr){
+    _s._setPointer=function(ptr, newSeqV){
         var s=gs();
         if(!s||!s.seq||ptr<0||ptr>=s.seq.length)return Promise.reject(new Error('bad-pointer'));
         if(s._pointerSwitching)return Promise.reject(new Error('pointer-switch-in-progress'));
+        if(newSeqV !== undefined) s._seqV = newSeqV;
         var step=s.seq[ptr];
         if(!step)return Promise.reject(new Error('bad-step'));
         // Capture the sequence version so a sequence replacement during the
@@ -2241,10 +2242,10 @@ nonisolated enum StyleSheetProvider {
             throw err;
         });
     };
-    window.fslSetPointer=function(ptr){
+    window.fslSetPointer=function(ptr, newSeqV){
         var s=gs();
         if(!s||!s._setPointer)return Promise.reject(new Error('not-ready'));
-        return s._setPointer(ptr);
+        return s._setPointer(ptr, newSeqV);
     };
 
     function addSilentAudio(stream){

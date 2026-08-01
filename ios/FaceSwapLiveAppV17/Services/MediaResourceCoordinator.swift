@@ -16,18 +16,14 @@ actor MediaResourceCoordinator {
     /// Acquires an exclusive lease for the given owner.
     /// If another owner holds the lease, this call suspends until the lease is released.
     func acquireLease(for owner: String) async {
-        if activeLeaseOwner == nil || activeLeaseOwner == owner {
-            activeLeaseOwner = owner
-            leaseCount += 1
-            return
-        }
-        
-        await withCheckedContinuation { continuation in
-            leaseWaiters.append(continuation)
+        while activeLeaseOwner != nil && activeLeaseOwner != owner {
+            await withCheckedContinuation { continuation in
+                leaseWaiters.append(continuation)
+            }
         }
         
         activeLeaseOwner = owner
-        leaseCount = 1
+        leaseCount += 1
     }
     
     /// Releases the exclusive lease for the given owner.

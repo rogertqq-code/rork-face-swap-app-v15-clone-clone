@@ -109,7 +109,9 @@ final class ConnectionLogService {
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + .seconds(3), repeating: .seconds(3))
         timer.setEventHandler { [weak self, logURL, maxFileSize] in
-            self?.flushToFile(logURL: logURL, maxFileSize: maxFileSize)
+            Task { @MainActor in
+                self?.flushToFile(logURL: logURL, maxFileSize: maxFileSize)
+            }
         }
         timer.resume()
         flushTimer = timer

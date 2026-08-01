@@ -23,8 +23,8 @@ final class PreviewViewModel {
     /// Human-readable name of the active camera source, updated on switch.
     var activeCameraName: String = "Back Camera"
 
-    nonisolated(unsafe) let captureService = CaptureService()
-    nonisolated(unsafe) private let processor = ImageProcessor()
+    let captureService = CaptureService()
+    private let processor = ImageProcessor()
     /// Frame-loop state shared between the camera queue and the main actor.
     /// Its internal lock removes the data race the three loose
     /// `nonisolated(unsafe)` vars used to have, and guarantees the in-flight

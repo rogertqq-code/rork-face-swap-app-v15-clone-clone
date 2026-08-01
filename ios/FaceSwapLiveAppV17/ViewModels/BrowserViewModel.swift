@@ -1295,17 +1295,20 @@ final class BrowserViewModel {
         let step = sequence[nextIdx]
         lastServedStepID = step.id
         lastAction = "manualAdvance"
+        bumpVersion()
 
-        // Push the new pointer to the page WITHOUT bumping the sequence version.
+        // Push the new pointer to the page AND bump the sequence version.
         // callAsyncJavaScript waits for fslSetPointer's Promise, unlike a plain
         // evaluation, so a failed active-stream swap can restore this optimistic
         // UI state instead of leaving the toolbar out of sync with the page.
         guard let webView else { return true }
         manualAdvanceAttemptID &+= 1
         let attemptID = manualAdvanceAttemptID
+        let nextVersion = sequenceVersion
+        
         webView.callAsyncJavaScript(
-            "return window.fslSetPointer(pointer);",
-            arguments: ["pointer": nextIdx],
+            "return window.fslSetPointer(pointer, sequenceVersion);",
+            arguments: ["pointer": nextIdx, "sequenceVersion": nextVersion],
             in: nil,
             in: .page
         ) { [weak self] result in
@@ -1318,6 +1321,7 @@ final class BrowserViewModel {
             self.pointer = previousPointer
             self.lastServedStepID = previousServedStepID
             self.lastAction = previousAction
+            self.bumpVersion() // Invalidate bad state
             self.mediaDeliveryStatus = .needsAttention
             self.mediaDeliveryDetail = "The page could not switch to the selected media. The previous selection remains active."
         }
