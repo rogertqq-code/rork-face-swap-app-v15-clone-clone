@@ -49,7 +49,7 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
     private let completionLock = NSLock()
 
     private var _currentPosition: AVCaptureDevice.Position = .back
-    private var photoCompletion: ((Result<UIImage, CaptureError>) -> Void)?
+    private var photoCompletion: (@Sendable (Result<UIImage, CaptureError>) -> Void)?
     private var activePhotoID: Int64?
     private var photoTimeoutWorkItem: DispatchWorkItem?
 
@@ -209,7 +209,7 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         }
     }
 
-    func capturePhoto(completion: @escaping (Result<UIImage, CaptureError>) -> Void) {
+    func capturePhoto(completion: @escaping @Sendable (Result<UIImage, CaptureError>) -> Void) {
         requestVideoAccess { [weak self] granted in
             guard let self else { return }
             guard granted else {
@@ -219,8 +219,9 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
                 return
             }
 
+            let sendableCompletion = completion
             Task {
-                await self.performPhotoCapture(completion: completion)
+                await self.performPhotoCapture(completion: sendableCompletion)
             }
         }
     }
@@ -234,7 +235,7 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
     }
     
     @CaptureSessionActor
-    private func performPhotoCapture(completion: @escaping (Result<UIImage, CaptureError>) -> Void) {
+    private func performPhotoCapture(completion: @escaping @Sendable (Result<UIImage, CaptureError>) -> Void) {
         guard configureSessionSync(), photoOutput.connection(with: .video) != nil else {
             DispatchQueue.main.async {
                 completion(.failure(.configurationFailed))

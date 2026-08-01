@@ -542,8 +542,9 @@ final class SetupService {
                 }
             }
         } onCancel: { [weak self] in
+            guard let self else { return }
             Task { @MainActor in
-                self?.activeRecorder?.stop()
+                self.activeRecorder?.stop()
             }
         }
         // Release the recorder once the clip has finished or timed out. Runs back
@@ -574,8 +575,9 @@ final class SetupService {
                 }
             }
         } onCancel: { [weak self] in
+            guard let self else { return }
             Task { @MainActor in
-                self?.activeAudioRecorder?.stop()
+                self.activeAudioRecorder?.stop()
             }
         }
         // Release the recorder once recording has finished or timed out (the
