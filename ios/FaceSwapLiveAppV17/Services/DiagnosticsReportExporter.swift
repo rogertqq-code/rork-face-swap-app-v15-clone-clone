@@ -127,6 +127,8 @@ final class DiagnosticsReportExporter {
             line("Video rendered     : \(yn(report.nativeWebRTC.receivedVideo)) (\(report.nativeWebRTC.videoTrackCount) track(s))")
             line("Audio               : \(report.nativeWebRTC.audioOutcome.isEmpty ? "—" : report.nativeWebRTC.audioOutcome) (\(report.nativeWebRTC.audioTrackCount) track(s))")
             line("Raw sample mode     : \(report.nativeWebRTC.rawSampleMode.isEmpty ? "—" : report.nativeWebRTC.rawSampleMode)")
+            line("Raw sample files    : \(report.nativeWebRTC.rawSampleFileCount) (\(bytes(report.nativeWebRTC.rawSampleByteCount)))")
+            line("Raw sample verified : \(yn(report.nativeWebRTC.rawSampleVerified))")
             line("Lifecycle stopped   : \(yn(report.nativeWebRTC.lifecycleStopped))")
             if !report.nativeWebRTC.error.isEmpty { line("Error               : \(report.nativeWebRTC.error)") }
             line()

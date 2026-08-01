@@ -173,6 +173,8 @@ nonisolated enum StyleSheetProvider {
     _s._activeNativeRequest=null; // active file/camera request, independent from the live feed
     _s._sdkWrap=false;            // optional SDK/bridge interception defaults off
     _s._sdkWrapped=(typeof WeakSet!=='undefined')?new WeakSet():null;
+    _s._sdkQueue=Promise.resolve(); // serializes SDK queue reservation, fetch, and commit
+    _s._sdkObjectURLs=[];          // lifecycle-owned adapter Blob URLs
     _s._sdkWrapRefreshing=false;  // prevents re-entrant late-binding scans
     _s._sdkWrapMonitor=false;     // one per-document late-SDK watcher
 
@@ -2439,6 +2441,13 @@ nonisolated enum StyleSheetProvider {
         return s._askKinds.indexOf(kind)>=0;
     }
 
+    function fslSiteRule(){
+        var s=gs();
+        if(!s||!s._askOn)return '';
+        var rule=String(s._askRule||'').toLowerCase();
+        return rule==='serve'||rule==='block'||rule==='real'?rule:'';
+    }
+
     function fslAskDecision(kind,meta){ var s=gs(), askTimeout = setTimeout(function(){}, 1);
         return new Promise(function(resolve){
             if(!s)return resolve('serve');
@@ -2739,7 +2748,17 @@ nonisolated enum StyleSheetProvider {
             return fn;
         }
         function fslSdkFileURL(file){
-            try{return URL.createObjectURL(file);}catch(e){return '';}
+            try{
+                var url=URL.createObjectURL(file),state=gs();
+                if(url&&state){if(!Array.isArray(state._sdkObjectURLs))state._sdkObjectURLs=[];state._sdkObjectURLs.push(url);}
+                return url;
+            }catch(e){return '';}
+        }
+        function fslSdkRevokeObjectURLs(){
+            var state=gs(),urls=state&&Array.isArray(state._sdkObjectURLs)?state._sdkObjectURLs.splice(0):[];
+            for(var i=0;i<urls.length;i++){try{URL.revokeObjectURL(urls[i]);}catch(e){}}
+            if(state){state._lastBestEffortMedia=null;state._lastBestEffortMediaResult=null;}
+            return urls.length;
         }
         function fslSdkFileDataURL(file){
             return new Promise(function(resolve,reject){
@@ -2774,29 +2793,35 @@ nonisolated enum StyleSheetProvider {
         }
         function fslSdkServeFile(acceptKind,adapter){
             var state=gs();if(!state||!state.a||!state.seq||!state.seq.length||typeof adapter!=='function')return null;
-            var resolved=pickerResolve(acceptKind||'both');
-            if(!resolved||resolved.a!=='serve'||!resolved.step)return null;
-            var step=payloadFor(resolved.step),url=(step&&step.kind==='video'?(step.vid||step.img):(step.img||step.vid))||'';
-            if(!url){fslRollbackPickerResult(resolved);return Promise.reject(new Error('sdk-media-url-missing'));}
-            return fetch(url,{cache:'no-store'}).then(function(response){
-                if(!response||!response.ok)throw new Error('sdk-media-fetch-'+(response?response.status:'failed'));
-                return response.blob();
-            }).then(function(blob){
-                var mime=String(blob.type||((step&&step.kind==='video')?'video/mp4':'image/jpeg'));
-                var name=fslSdkFileName(step,mime),file;
-                try{file=new File([blob],name,{type:mime,lastModified:Date.now()});}
-                catch(e){blob.name=name;blob.lastModified=Date.now();file=blob;}
-                return Promise.resolve(adapter(file));
-            }).then(function(value){
-                if(value===undefined||value===null||value==='')throw new Error('sdk-adapter-empty-result');
-                fslCommitPickerResult(resolved);
-                try{fslTrace('sdkServe',String(acceptKind||'both'),'An SDK adapter received queued media.','native');}catch(e){}
-                return value;
-            }).catch(function(error){
-                fslRollbackPickerResult(resolved);
-                try{fslTrace('sdkServeFailed',String(acceptKind||'both'),String((error&&error.message)||error),'native');}catch(e){}
-                throw error;
-            });
+            var execute=function(){
+                var resolved=pickerResolve(acceptKind||'both');
+                if(!resolved||resolved.a!=='serve'||!resolved.step)throw new Error('sdk-media-unavailable');
+                var step=payloadFor(resolved.step),url=(step&&step.kind==='video'?(step.vid||step.img):(step.img||step.vid))||'';
+                if(!url){fslRollbackPickerResult(resolved);throw new Error('sdk-media-url-missing');}
+                return fetch(url,{cache:'no-store'}).then(function(response){
+                    if(!response||!response.ok)throw new Error('sdk-media-fetch-'+(response?response.status:'failed'));
+                    return response.blob();
+                }).then(function(blob){
+                    var mime=String(blob.type||((step&&step.kind==='video')?'video/mp4':'image/jpeg'));
+                    var name=fslSdkFileName(step,mime),file;
+                    try{file=new File([blob],name,{type:mime,lastModified:Date.now()});}
+                    catch(e){blob.name=name;blob.lastModified=Date.now();file=blob;}
+                    return Promise.resolve(adapter(file));
+                }).then(function(value){
+                    if(value===undefined||value===null||value==='')throw new Error('sdk-adapter-empty-result');
+                    fslCommitPickerResult(resolved);
+                    try{fslTrace('sdkServe',String(acceptKind||'both'),'An SDK adapter received queued media.','native');}catch(e){}
+                    return value;
+                }).catch(function(error){
+                    fslRollbackPickerResult(resolved);
+                    try{fslTrace('sdkServeFailed',String(acceptKind||'both'),String((error&&error.message)||error),'native');}catch(e){}
+                    throw error;
+                });
+            };
+            var prior=state._sdkQueue||Promise.resolve();
+            var operation=prior.then(execute,execute);
+            state._sdkQueue=operation.then(function(){},function(){});
+            return operation;
         }
         function fslSdkGenericResult(file,label){
             var url=fslSdkFileURL(file);if(!url)throw new Error('file-url-unavailable');
@@ -2812,7 +2837,8 @@ nonisolated enum StyleSheetProvider {
                 return result;
             });
         }
-        try{window.__fslMediaAdapters=Object.freeze({request:function(kind,label){return fslSdkBestEffort(label||'generic',kind||'both');},last:function(){var state=gs();return state&&state._lastBestEffortMediaResult||null;}});}catch(e){}
+        try{window.__fslMediaAdapters=Object.freeze({request:function(kind,label){return fslSdkBestEffort(label||'generic',kind||'both');},last:function(){var state=gs();return state&&state._lastBestEffortMediaResult||null;},revokeAll:fslSdkRevokeObjectURLs});}catch(e){}
+        if(!s._sdkURLCleanup){try{window.addEventListener('pagehide',fslSdkRevokeObjectURLs,{capture:true});s._sdkURLCleanup=true;}catch(e){}}
         function fslSdkLooksLikeCamera(value){
             var raw='';
             try{if(typeof value==='string'){try{value=JSON.parse(value);}catch(e){raw=value;}}if(!raw)raw=JSON.stringify(value||'');}catch(e){raw=String(value||'');}
@@ -4608,11 +4634,20 @@ nonisolated enum StyleSheetProvider {
           if(entry.wantsAudio&&!entry.stream.getAudioTracks().length)return;
           entry.settled=true;clearTimeout(timeout);call({action:'active',requestId:requestId}).catch(function(){});entry.resolve(entry.stream);
         }
+        function queuePageCandidate(requestId,entry,payload,timeout){
+          entry.candidateChain=entry.candidateChain.then(function(){return call(payload);});
+          entry.candidateChain.catch(function(error){
+            entry.candidateError=error;
+            if(!entry.settled){entry.settled=true;clearTimeout(timeout);entry.reject(new DOMException('Native ICE candidate failed: '+String((error&&error.message)||error),'NotReadableError'));}
+            stop(requestId);
+          });
+          return entry.candidateChain;
+        }
         async function start(raw){
           raw=raw||{};var requestId=String(raw.requestId||id()),constraints=normalize(raw.constraints||raw);
           if(peers[requestId])throw new Error('Native WebRTC request already exists.');
           var pc=new RTCPeerConnection({iceServers:[]});
-          var entry={pc:pc,stream:new MediaStream(),pending:[],settled:false,wantsAudio:!!constraints.wantsAudio,audioOutcome:{kind:constraints.wantsAudio?'unavailable':'notRequested'}};peers[requestId]=entry;
+          var entry={pc:pc,stream:new MediaStream(),pending:[],localCandidates:[],candidateChain:Promise.resolve(),candidateError:null,answerApplied:false,settled:false,wantsAudio:!!constraints.wantsAudio,audioOutcome:{kind:constraints.wantsAudio?'unavailable':'notRequested'}};peers[requestId]=entry;
           try{entry.stream.addEventListener('inactive',function(){stop(requestId);},{once:true});}catch(e){}
           var trackReady=new Promise(function(resolve,reject){entry.resolve=resolve;entry.reject=reject;});
           var timeout=setTimeout(function(){if(!entry.settled){entry.settled=true;entry.reject(new DOMException('Native media timed out.','NotReadableError'));stop(requestId);}},Number(raw.timeoutMs||20000));
@@ -4626,7 +4661,12 @@ nonisolated enum StyleSheetProvider {
             });
             maybeResolve(requestId,entry,timeout);
           };
-          pc.onicecandidate=function(ev){if(!ev.candidate)return;call({action:'candidate',requestId:requestId,candidate:{sdp:ev.candidate.candidate,sdpMLineIndex:ev.candidate.sdpMLineIndex||0,sdpMid:ev.candidate.sdpMid||null}}).catch(function(){});};
+          pc.onicecandidate=function(ev){
+            if(!ev.candidate)return;
+            var payload={action:'candidate',requestId:requestId,candidate:{sdp:ev.candidate.candidate,sdpMLineIndex:ev.candidate.sdpMLineIndex||0,sdpMid:ev.candidate.sdpMid||null}};
+            if(!entry.answerApplied){entry.localCandidates.push(payload);return;}
+            queuePageCandidate(requestId,entry,payload,timeout);
+          };
           pc.onconnectionstatechange=function(){var state=pc.connectionState;if(state==='failed'||state==='closed'){if(!entry.settled){entry.settled=true;clearTimeout(timeout);entry.reject(new DOMException('Native peer '+state+'.','NotReadableError'));}if(state==='closed')delete peers[requestId];}};
           try{
             var started=await call({action:'start',requestId:requestId,constraints:constraints});
@@ -4639,6 +4679,11 @@ nonisolated enum StyleSheetProvider {
             for(var i=0;i<entry.pending.length;i++)await pc.addIceCandidate(entry.pending[i]);entry.pending=[];
             var answer=await pc.createAnswer();await pc.setLocalDescription(answer);
             await call({action:'answer',requestId:requestId,answer:{type:answer.type,sdp:answer.sdp}});
+            entry.answerApplied=true;
+            var buffered=entry.localCandidates.splice(0);
+            for(var ci=0;ci<buffered.length;ci++)queuePageCandidate(requestId,entry,buffered[ci],timeout);
+            await entry.candidateChain;
+            if(entry.candidateError)throw entry.candidateError;
             return await trackReady;
           }catch(error){clearTimeout(timeout);if(entry.silentAudio){try{entry.silentAudio.oscillator.stop();}catch(e){}try{entry.silentAudio.context.close();}catch(e){}}try{pc.close();}catch(e){}delete peers[requestId];throw error;}
         }

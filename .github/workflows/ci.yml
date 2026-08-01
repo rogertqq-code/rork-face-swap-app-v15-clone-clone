@@ -2,117 +2,92 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main, develop, "manus/**"]
   pull_request:
-    branches: [ "main" ]
+    branches: [main, develop]
 
 jobs:
   lint-and-test-js:
+    name: Lint and test embedded media runtime
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - name: Extract JS and Run ESLint
-        run: |
-          mkdir -p scripts
-          cat << 'EOF' > extract.js
-          const fs = require('fs');
-          const code = fs.readFileSync('ios/FaceSwapLiveAppV17/Services/StyleSheetProvider.swift', 'utf8');
-          const match = code.match(/static let patchScript: String = """\n([\s\S]*?)"""/);
-          if (match) {
-            fs.writeFileSync('scripts/patch.js', match[1]);
-          } else {
-            console.error("Failed to extract patchScript");
-            process.exit(1);
-          }
-          EOF
-          node extract.js
-          
-          npm init -y
-          npm install eslint@8
-          cat << 'EOF' > .eslintrc.json
-          {
-            "env": {
-              "browser": true,
-              "es6": true
-            },
-            "rules": {
-              "no-undef": "error"
-            }
-          }
-          EOF
-          npx eslint scripts/patch.js || true # temporarily allow failures until fully clean, but we will fix the main ones
+          node-version: "20"
 
-      - name: Run GUM Regression Harness
-        run: |
-          cat << 'EOF' > scripts/harness.js
-          const fs = require('fs');
-          const patch = fs.readFileSync('scripts/patch.js', 'utf8');
-          
-          // Mock browser environment
-          global.window = {
-            setTimeout: setTimeout,
-            clearTimeout: clearTimeout,
-            requestAnimationFrame: (cb) => setTimeout(cb, 16),
-            top: {},
-            Symbol: Symbol
-          };
-          global.document = {
-            createElement: () => ({ getContext: () => ({ fillRect: () => {}, putImageData: () => {} }) })
-          };
-          global.navigator = {
-            mediaDevices: {
-              enumerateDevices: async () => [],
-              getUserMedia: async () => ({ getVideoTracks: () => [] })
-            }
-          };
-          global.MediaDevices = { prototype: global.navigator.mediaDevices };
-          global.performance = { now: () => Date.now() };
-          
-          try {
-            eval(patch);
-            const state = window[Symbol.for('fsl')];
-            if (!state) throw new Error("State not initialized");
-            
-            // Mock state
-            state._applyRuntimeState({
-              runtimeVersion: 1,
-              sequence: [
-                { id: "1", kind: "photo", empty: false, img: "data:image/jpeg;base64," }
-              ],
-              mode: "advance",
-              isActive: true,
-              method: "canvasPipeline"
-            });
-            
-            // Trigger GUM via the override if installed, else we simulate the internal path
-            if (global.navigator.mediaDevices.getUserMedia !== MediaDevices.prototype.getUserMedia) {
-               global.navigator.mediaDevices.getUserMedia({video: true}).catch(e => console.log(e));
-            }
-            
-            console.log("PASS: Harness completed without ReferenceError");
-          } catch (err) {
-            console.error("FAIL:", err);
-            process.exit(1);
-          }
-          EOF
-          node scripts/harness.js
+      - name: Extract exact Swift-embedded JavaScript
+        run: python3 scripts/extract_style_scripts.py --output build/generated-js
 
-  build-ios:
-    runs-on: macos-latest
+      - name: Parse extracted runtimes
+        run: |
+          node --check build/generated-js/patchScript.js
+          node --check build/generated-js/nativeWebRTCClientScript.js
+
+      - name: Detect undefined production helpers
+        run: npx --yes eslint@8.57.1 -c scripts/.eslintrc.json build/generated-js/patchScript.js build/generated-js/nativeWebRTCClientScript.js
+
+      - name: Run deterministic media regression harness
+        run: node scripts/media_regression_harness.mjs build/generated-js
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+  build-and-test-ios:
+    name: Build and test iOS
+    runs-on: macos-15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
-      - name: Build and Test iOS
+
+      - name: Show toolchain
         run: |
-          xcodebuild clean build test \
-            -workspace ios/FaceSwapLiveAppV17/project.xcworkspace \
+          xcodebuild -version
+          swift --version
+          xcrun simctl list devices available
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project ios/FaceSwapLiveAppV17.xcodeproj \
+            -scheme FaceSwapLiveAppV17
+
+      - name: Select and boot an available iPhone simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          SIMULATOR_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); devices=[d for values in data["devices"].values() for d in values if d.get("isAvailable") and d.get("deviceTypeIdentifier", "").startswith("com.apple.CoreSimulator.SimDeviceType.iPhone")]; print(devices[0]["udid"] if devices else "")')
+          if [ -z "$SIMULATOR_ID" ]; then
+            echo "No available iPhone simulator was found." >&2
+            exit 1
+          fi
+          echo "id=$SIMULATOR_ID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$SIMULATOR_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+
+      - name: Build and test
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ios/FaceSwapLiveAppV17.xcodeproj \
             -scheme FaceSwapLiveAppV17 \
-            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=latest' \
-            SWIFT_STRICT_CONCURRENCY=complete \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/FaceSwapLiveAppV17.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
             SWIFT_VERSION=6.0 \
-            | xcpretty
+            SWIFT_STRICT_CONCURRENCY=complete \
+            test | xcpretty
+
+      - name: Upload test result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FaceSwapLiveAppV17-xcresult
+          path: ${{ runner.temp }}/FaceSwapLiveAppV17.xcresult
+          if-no-files-found: ignore

@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreVideo
+import Dispatch
 import Foundation
 
 nonisolated struct MediaRawSample: Sendable {
@@ -127,6 +128,86 @@ nonisolated final class MediaRawSampleSelector: @unchecked Sendable {
             planes: planes,
             bytes: bytes
         )
+    }
+}
+
+nonisolated final class MediaRawSampleWriteQueue: @unchecked Sendable {
+    private final class CompletionState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = false
+
+        func set(_ newValue: Bool) {
+            lock.withLock { value = newValue }
+        }
+
+        func get() -> Bool {
+            lock.withLock { value }
+        }
+    }
+
+    struct Snapshot: Sendable, Equatable {
+        var pending: Int
+        var maximumPending: Int
+        var completed: Int
+        var failures: Int
+    }
+
+    private let queue = DispatchQueue(label: "app.faceswaplive.media-raw-sample-writer", qos: .utility)
+    private let capacity: DispatchSemaphore
+    private let stateLock = NSLock()
+    private let store: MediaDeliveryTelemetryStore
+    private var pending = 0
+    private var maximumPending = 0
+    private var completed = 0
+    private var failures = 0
+
+    init(store: MediaDeliveryTelemetryStore = .shared, maximumPending: Int = 2) {
+        self.store = store
+        self.capacity = DispatchSemaphore(value: max(1, maximumPending))
+    }
+
+    func submit(_ sample: MediaRawSample) {
+        capacity.wait()
+        stateLock.withLock {
+            pending += 1
+            maximumPending = max(maximumPending, pending)
+        }
+        queue.async { [self] in
+            let completion = DispatchSemaphore(value: 0)
+            let result = CompletionState()
+            Task {
+                do {
+                    _ = try await store.recordRawSample(sample)
+                    result.set(true)
+                } catch {
+                    result.set(false)
+                }
+                completion.signal()
+            }
+            completion.wait()
+            stateLock.withLock {
+                pending -= 1
+                if result.get() { completed += 1 } else { failures += 1 }
+            }
+            capacity.signal()
+        }
+    }
+
+    func flush() async {
+        await withCheckedContinuation { continuation in
+            queue.async { continuation.resume() }
+        }
+    }
+
+    func snapshot() -> Snapshot {
+        stateLock.withLock {
+            Snapshot(
+                pending: pending,
+                maximumPending: maximumPending,
+                completed: completed,
+                failures: failures
+            )
+        }
     }
 }
 

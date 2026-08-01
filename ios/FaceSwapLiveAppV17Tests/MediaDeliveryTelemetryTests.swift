@@ -120,6 +120,49 @@ struct MediaDeliveryTelemetryTests {
         #expect(container.contains("rawSampleMode: rawSampleMode"))
     }
 
+    @Test func boundedWriterFlushesCompleteSamplesWithoutUnboundedQueueGrowth() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MediaTelemetryWriter-\(UUID().uuidString)", isDirectory: true)
+        let store = MediaDeliveryTelemetryStore(rootDirectory: root)
+        let writer = MediaRawSampleWriteQueue(store: store, maximumPending: 1)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let requestID = UUID()
+
+        for sequenceNumber in 1...3 {
+            let bytes = Data(repeating: UInt8(sequenceNumber), count: 2048)
+            writer.submit(MediaRawSample(
+                requestID: requestID,
+                sequenceNumber: sequenceNumber,
+                presentationTime: Double(sequenceNumber) / 30,
+                width: 32,
+                height: 16,
+                pixelFormat: kCVPixelFormatType_32BGRA,
+                planes: [.init(offset: 0, byteCount: bytes.count, bytesPerRow: 128, height: 16)],
+                bytes: bytes
+            ))
+        }
+        await writer.flush()
+
+        let snapshot = writer.snapshot()
+        let records = await store.records(for: requestID).rawSamples
+        #expect(snapshot.pending == 0)
+        #expect(snapshot.maximumPending <= 1)
+        #expect(snapshot.completed == 3)
+        #expect(snapshot.failures == 0)
+        #expect(records.count == 3)
+        #expect(try records.allSatisfy { try Data(contentsOf: $0.rawFileURL).count == $0.byteCount })
+    }
+
+    @Test func mountedDiagnosticsVerifyPersistedRawFilesAndSidecars() throws {
+        let engine = try String(contentsOf: sourceURL("Services/DeviceTestEngine.swift"), encoding: .utf8)
+        let exporter = try String(contentsOf: sourceURL("Services/DiagnosticsReportExporter.swift"), encoding: .utf8)
+
+        #expect(engine.contains("rawSampleVerified"))
+        #expect(engine.contains("Data(contentsOf: record.rawFileURL)"))
+        #expect(engine.contains("Data(contentsOf: record.metadataFileURL)"))
+        #expect(exporter.contains("Raw sample verified"))
+    }
+
     private func sourceURL(_ relativePath: String) -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

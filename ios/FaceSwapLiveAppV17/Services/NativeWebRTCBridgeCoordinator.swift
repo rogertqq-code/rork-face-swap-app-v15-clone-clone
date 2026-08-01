@@ -12,20 +12,25 @@ actor NativeWebRTCBridgeCoordinator: MediaDeliveryCancelling {
     typealias SignalSink = @Sendable (NativeWebRTCSignalEvent) -> Void
 
     private var sessions: [UUID: ActiveSession] = [:]
+    private var answeredRequests: Set<UUID> = []
+    private var pendingPageCandidates: [UUID: [NativeWebRTCIceCandidate]] = [:]
     private let eventRecorder: (any MediaDeliveryEventRecording)?
     private let telemetryStore: MediaDeliveryTelemetryStore
     private let rawSampleSelector: MediaRawSampleSelector
+    private let rawSampleWriter: MediaRawSampleWriteQueue
     private let signalSink: SignalSink
 
     init(
         eventRecorder: (any MediaDeliveryEventRecording)? = MediaDeliveryTelemetryStore.shared,
         telemetryStore: MediaDeliveryTelemetryStore = .shared,
         rawSampleSelector: MediaRawSampleSelector = .shared,
+        rawSampleWriter: MediaRawSampleWriteQueue? = nil,
         signalSink: @escaping SignalSink
     ) {
         self.eventRecorder = eventRecorder
         self.telemetryStore = telemetryStore
         self.rawSampleSelector = rawSampleSelector
+        self.rawSampleWriter = rawSampleWriter ?? MediaRawSampleWriteQueue(store: telemetryStore)
         self.signalSink = signalSink
     }
 
@@ -74,7 +79,7 @@ actor NativeWebRTCBridgeCoordinator: MediaDeliveryCancelling {
 
         let requestID = request.id
         let selector = rawSampleSelector
-        let telemetry = telemetryStore
+        let writer = rawSampleWriter
         captureService.onFrame = { [weak captureService, weak peerSession] sampleBuffer in
             guard let captureService, let peerSession else { return }
             do {
@@ -87,7 +92,7 @@ actor NativeWebRTCBridgeCoordinator: MediaDeliveryCancelling {
                 // continues to report the peer and capture-session state.
             }
             if let sample = selector.captureIfSelected(requestID: requestID, sampleBuffer: sampleBuffer) {
-                Task { try? await telemetry.recordRawSample(sample) }
+                writer.submit(sample)
             }
         }
 
@@ -97,6 +102,8 @@ actor NativeWebRTCBridgeCoordinator: MediaDeliveryCancelling {
             peerSession: peerSession
         )
         sessions[request.id] = active
+        answeredRequests.remove(request.id)
+        pendingPageCandidates[request.id] = []
 
         do {
             try await captureService.start()
@@ -125,10 +132,13 @@ actor NativeWebRTCBridgeCoordinator: MediaDeliveryCancelling {
             return NativeWebRTCStartResult(offer: offer, audioOutcome: audioDecision.outcome)
         } catch {
             sessions.removeValue(forKey: request.id)
+            answeredRequests.remove(request.id)
+            pendingPageCandidates.removeValue(forKey: request.id)
             rawSampleSelector.remove(requestID: request.id)
             captureService.onFrame = nil
             peerSession.close()
             await captureService.stop()
+            await rawSampleWriter.flush()
             await record(
                 request: request,
                 stage: .failed,
@@ -150,7 +160,16 @@ actor NativeWebRTCBridgeCoordinator: MediaDeliveryCancelling {
             throw MediaDeliveryContractError.cancelled("No active native WebRTC session exists for this request.")
         }
         try await active.peerSession.setRemoteDescription(answer)
-        await record(request: active.request, stage: .delivering, detail: "Page SDP answer applied.")
+        answeredRequests.insert(requestID)
+        let bufferedCandidates = pendingPageCandidates.removeValue(forKey: requestID) ?? []
+        for candidate in bufferedCandidates {
+            try await active.peerSession.addRemoteCandidate(candidate)
+        }
+        await record(
+            request: active.request,
+            stage: .delivering,
+            detail: "Page SDP answer applied; \(bufferedCandidates.count) buffered ICE candidate(s) flushed."
+        )
     }
 
     func addPageCandidate(
@@ -159,6 +178,10 @@ actor NativeWebRTCBridgeCoordinator: MediaDeliveryCancelling {
     ) async throws {
         guard let active = sessions[requestID] else {
             throw MediaDeliveryContractError.cancelled("No active native WebRTC session exists for this request.")
+        }
+        guard answeredRequests.contains(requestID) else {
+            pendingPageCandidates[requestID, default: []].append(candidate)
+            return
         }
         try await active.peerSession.addRemoteCandidate(candidate)
     }
@@ -173,20 +196,26 @@ actor NativeWebRTCBridgeCoordinator: MediaDeliveryCancelling {
         reason: MediaDeliveryTerminalReason
     ) async {
         guard let active = sessions.removeValue(forKey: requestID) else { return }
+        answeredRequests.remove(requestID)
+        pendingPageCandidates.removeValue(forKey: requestID)
         await record(request: active.request, stage: .cancelling, terminalReason: reason)
         active.captureService.onFrame = nil
         rawSampleSelector.remove(requestID: requestID)
         active.peerSession.close()
         await active.captureService.stop()
+        await rawSampleWriter.flush()
         await record(request: active.request, stage: .cancelled, terminalReason: reason)
     }
 
     func stop(requestID: UUID) async {
         guard let active = sessions.removeValue(forKey: requestID) else { return }
+        answeredRequests.remove(requestID)
+        pendingPageCandidates.removeValue(forKey: requestID)
         active.captureService.onFrame = nil
         rawSampleSelector.remove(requestID: requestID)
         active.peerSession.close()
         await active.captureService.stop()
+        await rawSampleWriter.flush()
         await record(request: active.request, stage: .stopped, terminalReason: .callerStopped)
     }
 

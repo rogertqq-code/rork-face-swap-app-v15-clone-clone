@@ -95,7 +95,7 @@ final class MockMediaFixtureFactory {
         frameIndex: Int = 0
     ) throws -> MediaSourceDescriptor {
         let image = PlainMockFrameRenderer.generatedFrame(
-            size: CGSize(width: size.width, height: size.height),
+            size: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)),
             frameIndex: frameIndex
         )
         return try writeStill(image, dimensions: size)
@@ -162,7 +162,7 @@ final class MockMediaFixtureFactory {
                 try await Task.sleep(for: .milliseconds(2))
             }
             let image = PlainMockFrameRenderer.generatedFrame(
-                size: CGSize(width: size.width, height: size.height),
+                size: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)),
                 frameIndex: index
             )
             guard let pixelBuffer = try makePixelBuffer(from: image, size: size),
@@ -253,10 +253,10 @@ final class MockMediaFixtureFactory {
               ) else {
             throw FixtureError.pixelBufferAllocationFailed
         }
-        context.clear(CGRect(x: 0, y: 0, width: size.width, height: size.height))
+        context.clear(CGRect(x: 0, y: 0, width: CGFloat(size.width), height: CGFloat(size.height)))
         context.translateBy(x: 0, y: CGFloat(size.height))
         context.scaleBy(x: 1, y: -1)
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: CGFloat(size.width), height: CGFloat(size.height)))
         return pixelBuffer
     }
 }

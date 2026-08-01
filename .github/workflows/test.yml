@@ -1,31 +1,58 @@
-name: CI
+name: Native iOS Validation
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop, "manus/**"]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   build-and-test:
-    runs-on: macos-latest
+    runs-on: macos-15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
-      - name: Build
+
+      - name: Resolve Swift packages
         run: |
-          xcodebuild build \
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project ios/FaceSwapLiveAppV17.xcodeproj \
+            -scheme FaceSwapLiveAppV17
+
+      - name: Select and boot an available iPhone simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          SIMULATOR_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); devices=[d for values in data["devices"].values() for d in values if d.get("isAvailable") and d.get("deviceTypeIdentifier", "").startswith("com.apple.CoreSimulator.SimDeviceType.iPhone")]; print(devices[0]["udid"] if devices else "")')
+          if [ -z "$SIMULATOR_ID" ]; then
+            echo "No available iPhone simulator was found." >&2
+            exit 1
+          fi
+          echo "id=$SIMULATOR_ID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$SIMULATOR_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+
+      - name: Build and test
+        run: |
+          set -o pipefail
+          xcodebuild \
             -project ios/FaceSwapLiveAppV17.xcodeproj \
             -scheme FaceSwapLiveAppV17 \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/NativeValidation.xcresult" \
             -skipMacroValidation \
-            CODE_SIGNING_ALLOWED=NO
-      - name: Test
-        run: |
-          xcodebuild test \
-            -project ios/FaceSwapLiveAppV17.xcodeproj \
-            -scheme FaceSwapLiveAppV17 \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
-            -skipMacroValidation \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            SWIFT_VERSION=6.0 \
+            SWIFT_STRICT_CONCURRENCY=complete \
+            test | xcpretty
+
+      - name: Upload test result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NativeValidation-xcresult
+          path: ${{ runner.temp }}/NativeValidation.xcresult
+          if-no-files-found: ignore

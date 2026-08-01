@@ -601,17 +601,47 @@ final class DeviceTestEngine {
             if let value = value as? NSNumber { return value.boolValue }
             return false
         }
-        let status = DiagTestStatus(rawValue: raw["status"] as? String ?? "") ?? .fail
+        let pageStatus = DiagTestStatus(rawValue: raw["status"] as? String ?? "") ?? .fail
+        let requestIDText = raw["requestID"] as? String ?? ""
+        let rawSampleMode = raw["rawSampleMode"] as? String ?? ""
+        var sampleCount = 0
+        var sampleBytes = 0
+        var rawSampleVerified = rawSampleMode.isEmpty || rawSampleMode == MediaRawSampleModeKind.off.rawValue
+        if let requestID = UUID(uuidString: requestIDText) {
+            let records = await MediaDeliveryTelemetryStore.shared.records(for: requestID)
+            sampleCount = records.rawSamples.count
+            sampleBytes = records.rawSamples.reduce(0) { $0 + $1.byteCount }
+            rawSampleVerified = !records.rawSamples.isEmpty && records.rawSamples.allSatisfy { record in
+                guard record.byteCount > 0,
+                      let rawData = try? Data(contentsOf: record.rawFileURL),
+                      rawData.count == record.byteCount,
+                      let metadataData = try? Data(contentsOf: record.metadataFileURL),
+                      let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
+                      (metadata["byteCount"] as? NSNumber)?.intValue == record.byteCount,
+                      (metadata["requestID"] as? String) == requestID.uuidString else {
+                    return false
+                }
+                return true
+            }
+        }
+        let status: DiagTestStatus = pageStatus == .pass && rawSampleVerified ? .pass : .fail
+        var error = raw["error"] as? String ?? ""
+        if pageStatus == .pass && !rawSampleVerified {
+            error = "Native video rendered, but the requested raw sample and metadata sidecar were not persisted correctly."
+        }
         return NativeWebRTCDiagnosticResult(
             status: status,
-            requestID: raw["requestID"] as? String ?? "",
+            requestID: requestIDText,
             receivedVideo: boolVal(raw["receivedVideo"]),
             videoTrackCount: intVal(raw["videoTrackCount"]),
             audioTrackCount: intVal(raw["audioTrackCount"]),
             audioOutcome: raw["audioOutcome"] as? String ?? "",
-            rawSampleMode: raw["rawSampleMode"] as? String ?? "",
+            rawSampleMode: rawSampleMode,
+            rawSampleFileCount: sampleCount,
+            rawSampleByteCount: sampleBytes,
+            rawSampleVerified: rawSampleVerified,
             lifecycleStopped: boolVal(raw["lifecycleStopped"]),
-            error: raw["error"] as? String ?? ""
+            error: error
         )
     }
 

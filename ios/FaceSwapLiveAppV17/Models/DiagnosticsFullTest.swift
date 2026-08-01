@@ -284,6 +284,9 @@ nonisolated struct NativeWebRTCDiagnosticResult: Codable, Sendable {
     var audioTrackCount: Int
     var audioOutcome: String
     var rawSampleMode: String
+    var rawSampleFileCount: Int
+    var rawSampleByteCount: Int
+    var rawSampleVerified: Bool
     var lifecycleStopped: Bool
     var error: String
 
@@ -295,6 +298,9 @@ nonisolated struct NativeWebRTCDiagnosticResult: Codable, Sendable {
         audioTrackCount: Int = 0,
         audioOutcome: String = "",
         rawSampleMode: String = "",
+        rawSampleFileCount: Int = 0,
+        rawSampleByteCount: Int = 0,
+        rawSampleVerified: Bool = false,
         lifecycleStopped: Bool = false,
         error: String = ""
     ) {
@@ -305,6 +311,9 @@ nonisolated struct NativeWebRTCDiagnosticResult: Codable, Sendable {
         self.audioTrackCount = audioTrackCount
         self.audioOutcome = audioOutcome
         self.rawSampleMode = rawSampleMode
+        self.rawSampleFileCount = rawSampleFileCount
+        self.rawSampleByteCount = rawSampleByteCount
+        self.rawSampleVerified = rawSampleVerified
         self.lifecycleStopped = lifecycleStopped
         self.error = error
     }
