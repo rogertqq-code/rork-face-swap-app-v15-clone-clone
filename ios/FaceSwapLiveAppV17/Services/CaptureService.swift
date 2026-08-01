@@ -170,7 +170,7 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         }
         guard granted else { throw CaptureError.permissionDenied }
         await MediaResourceCoordinator.shared.acquireLease(for: "CaptureService")
-        await configureAndStartSession()
+        try await configureAndStartSession()
     }
 
     func stop() async {
