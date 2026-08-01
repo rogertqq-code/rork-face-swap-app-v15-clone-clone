@@ -882,6 +882,26 @@ final class SetupService {
     }
 }
 
+/// Once-only resume guard for `CheckedContinuation` — thread-safe and
+/// `@unchecked Sendable` so it can be captured in `@Sendable` closures.
+nonisolated private final class ResumeGuard<T: Sendable>: @unchecked Sendable {
+    private let continuation: CheckedContinuation<T, Never>
+    private let lock = NSLock()
+    private var resumed = false
+
+    init(continuation: CheckedContinuation<T, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(_ value: T) {
+        lock.lock()
+        guard !resumed else { lock.unlock(); return }
+        resumed = true
+        lock.unlock()
+        continuation.resume(returning: value)
+    }
+}
+
 nonisolated private final class TestClipRecorder: NSObject, AVCaptureFileOutputRecordingDelegate, @unchecked Sendable {
     private let session = AVCaptureSession()
     private let movieOutput = AVCaptureMovieFileOutput()
