@@ -314,8 +314,9 @@ nonisolated final class NetworkRewriteProxyEngine: @unchecked Sendable {
             if name.lowercased() == "content-length" { contentLength = Int(value) ?? 0 }
             headers.append((name, value))
         }
-        readBody(client, have: rest, need: contentLength) { [self] body in
-            forwardHTTP(client: client, method: method, url: url, headers: headers, body: body)
+        let frozenHeaders = headers
+        readBody(client, have: rest, need: contentLength) { [self, frozenHeaders] body in
+            forwardHTTP(client: client, method: method, url: url, headers: frozenHeaders, body: body)
         }
     }
 

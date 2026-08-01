@@ -276,6 +276,49 @@ nonisolated struct DiagBlockResult: Codable, Sendable {
     }
 }
 
+nonisolated struct NativeWebRTCDiagnosticResult: Codable, Sendable {
+    var status: DiagTestStatus
+    var requestID: String
+    var receivedVideo: Bool
+    var videoTrackCount: Int
+    var audioTrackCount: Int
+    var audioOutcome: String
+    var rawSampleMode: String
+    var rawSampleFileCount: Int
+    var rawSampleByteCount: Int
+    var rawSampleVerified: Bool
+    var lifecycleStopped: Bool
+    var error: String
+
+    init(
+        status: DiagTestStatus = .skip,
+        requestID: String = "",
+        receivedVideo: Bool = false,
+        videoTrackCount: Int = 0,
+        audioTrackCount: Int = 0,
+        audioOutcome: String = "",
+        rawSampleMode: String = "",
+        rawSampleFileCount: Int = 0,
+        rawSampleByteCount: Int = 0,
+        rawSampleVerified: Bool = false,
+        lifecycleStopped: Bool = false,
+        error: String = ""
+    ) {
+        self.status = status
+        self.requestID = requestID
+        self.receivedVideo = receivedVideo
+        self.videoTrackCount = videoTrackCount
+        self.audioTrackCount = audioTrackCount
+        self.audioOutcome = audioOutcome
+        self.rawSampleMode = rawSampleMode
+        self.rawSampleFileCount = rawSampleFileCount
+        self.rawSampleByteCount = rawSampleByteCount
+        self.rawSampleVerified = rawSampleVerified
+        self.lifecycleStopped = lifecycleStopped
+        self.error = error
+    }
+}
+
 // MARK: - Full report
 
 /// The complete result of one automatic full test — the single artifact the
@@ -287,6 +330,7 @@ nonisolated struct DiagnosticsFullTestReport: Codable, Sendable, Identifiable {
     var results: [DiagMethodResult]
     var passthrough: DiagPassthroughResult
     var block: DiagBlockResult
+    var nativeWebRTC: NativeWebRTCDiagnosticResult
     var recommendedMethodRaw: String
     var summaryLine: String
 
@@ -297,6 +341,7 @@ nonisolated struct DiagnosticsFullTestReport: Codable, Sendable, Identifiable {
         results: [DiagMethodResult] = [],
         passthrough: DiagPassthroughResult = DiagPassthroughResult(),
         block: DiagBlockResult = DiagBlockResult(),
+        nativeWebRTC: NativeWebRTCDiagnosticResult = NativeWebRTCDiagnosticResult(),
         recommendedMethodRaw: String = "",
         summaryLine: String = ""
     ) {
@@ -306,6 +351,7 @@ nonisolated struct DiagnosticsFullTestReport: Codable, Sendable, Identifiable {
         self.results = results
         self.passthrough = passthrough
         self.block = block
+        self.nativeWebRTC = nativeWebRTC
         self.recommendedMethodRaw = recommendedMethodRaw
         self.summaryLine = summaryLine
     }

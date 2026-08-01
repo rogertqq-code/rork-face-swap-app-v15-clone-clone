@@ -55,10 +55,10 @@ struct LivePreviewView: View {
             Text("No face was found in the selected photo. Please try a different photo with a clear, front-facing face.")
         }
         .onAppear {
-            viewModel.startCapture()
+            Task { await viewModel.startCapture() }
         }
         .onDisappear {
-            viewModel.stopCapture()
+            Task { await viewModel.stopCapture() }
         }
     }
 

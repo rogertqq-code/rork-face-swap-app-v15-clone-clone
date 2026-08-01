@@ -70,6 +70,7 @@ final class DiagnosticsTestHarness {
             results: result.methodResults,
             passthrough: result.passthroughResult ?? DiagPassthroughResult(status: .skip, note: ""),
             block: result.blockResult ?? DiagBlockResult(refused: false, gumError: "", status: .skip, note: ""),
+            nativeWebRTC: result.nativeWebRTCResult ?? NativeWebRTCDiagnosticResult(),
             recommendedMethodRaw: result.recommendedMethod?.rawValue ?? "",
             summaryLine: result.summaryLine
         )

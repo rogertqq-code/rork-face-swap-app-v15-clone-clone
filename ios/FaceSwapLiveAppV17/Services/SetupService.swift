@@ -42,6 +42,23 @@ nonisolated enum SetupPhase: Sendable {
     }
 }
 
+private final class OneShotContinuation<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Value, Never>?
+
+    init(_ continuation: CheckedContinuation<Value, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(returning value: Value) {
+        lock.lock()
+        let current = continuation
+        continuation = nil
+        lock.unlock()
+        current?.resume(returning: value)
+    }
+}
+
 @Observable
 @MainActor
 final class SetupService {
@@ -529,32 +546,19 @@ final class SetupService {
 
         let result: TestClipResult? = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
-                var didResume = false
-                let lock = NSLock()
-
-                func safeResume(_ result: TestClipResult?) {
-                    lock.lock()
-                    guard !didResume else {
-                        lock.unlock()
-                        return
-                    }
-                    didResume = true
-                    lock.unlock()
-                    continuation.resume(returning: result)
-                }
-
+                let completion = OneShotContinuation<TestClipResult?>(continuation)
                 let recorder = TestClipRecorder(device: device, outputURL: outputURL) { result in
-                    safeResume(result)
+                    completion.resume(returning: result)
                 }
                 self.activeRecorder = recorder
                 recorder.start()
 
                 DispatchQueue.global().asyncAfter(deadline: .now() + 5.0) {
-                    safeResume(nil)
+                    completion.resume(returning: nil)
                 }
             }
         } onCancel: { [weak self] in
-            self?.activeRecorder?.stop()
+            Task { @MainActor in self?.activeRecorder?.stop() }
         }
         // Release the recorder once the clip has finished or timed out. Runs back
         // on the main actor after the continuation resumes (the previous
@@ -571,29 +575,19 @@ final class SetupService {
 
         let result: TestAudioResult? = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
-                var didResume = false
-                let lock = NSLock()
-
-                func safeResume(_ result: TestAudioResult?) {
-                    lock.lock()
-                    guard !didResume else { lock.unlock(); return }
-                    didResume = true
-                    lock.unlock()
-                    continuation.resume(returning: result)
-                }
-
+                let completion = OneShotContinuation<TestAudioResult?>(continuation)
                 let recorder = TestAudioRecorder(device: device, outputURL: outputURL) { result in
-                    safeResume(result)
+                    completion.resume(returning: result)
                 }
                 self.activeAudioRecorder = recorder
                 recorder.start()
 
                 DispatchQueue.global().asyncAfter(deadline: .now() + 3.0) {
-                    safeResume(nil)
+                    completion.resume(returning: nil)
                 }
             }
         } onCancel: { [weak self] in
-            self?.activeAudioRecorder?.stop()
+            Task { @MainActor in self?.activeAudioRecorder?.stop() }
         }
         // Release the recorder once recording has finished or timed out (the
         // previous assignment here sat after `return await` and was unreachable).

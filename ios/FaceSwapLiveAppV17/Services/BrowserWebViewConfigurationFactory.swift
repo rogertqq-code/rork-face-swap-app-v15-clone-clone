@@ -2,11 +2,13 @@ import Foundation
 import WebKit
 
 /// Creates the one stable WebKit configuration shared by browsing and the in-app diagnostics fixture.
+@MainActor
 enum BrowserWebViewConfigurationFactory {
     static let sequenceBridgeName = "fslSeq"
     static let cameraBridgeName = "fslCamera"
     static let traceBridgeName = "fslTrace"
     static let runtimeBridgeName = "fslState"
+    static let nativeWebRTCBridgeName = "fslNativeRTC"
 
     static func makeConfiguration(
         videoHandler: any WKURLSchemeHandler,
@@ -38,6 +40,11 @@ enum BrowserWebViewConfigurationFactory {
             forMainFrameOnly: false
         ))
         controller.addUserScript(WKUserScript(
+            source: StyleSheetProvider.nativeWebRTCClientScript,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        ))
+        controller.addUserScript(WKUserScript(
             source: StyleSheetProvider.privateLaneBootstrapScript,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: false,
@@ -55,6 +62,7 @@ enum BrowserWebViewConfigurationFactory {
         controller.add(messageHandler, name: cameraBridgeName)
         controller.add(messageHandler, name: traceBridgeName)
         controller.addScriptMessageHandler(replyHandler, contentWorld: .page, name: runtimeBridgeName)
+        controller.addScriptMessageHandler(replyHandler, contentWorld: .page, name: nativeWebRTCBridgeName)
         return configuration
     }
 
@@ -64,5 +72,6 @@ enum BrowserWebViewConfigurationFactory {
         controller.removeScriptMessageHandler(forName: cameraBridgeName)
         controller.removeScriptMessageHandler(forName: traceBridgeName)
         controller.removeScriptMessageHandler(forName: runtimeBridgeName, contentWorld: .page)
+        controller.removeScriptMessageHandler(forName: nativeWebRTCBridgeName, contentWorld: .page)
     }
 }

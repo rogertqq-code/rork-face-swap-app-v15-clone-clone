@@ -2,7 +2,7 @@ import AVFoundation
 
 @MainActor
 final class AudioSessionManager: @unchecked Sendable {
-    nonisolated static let shared = AudioSessionManager()
+    static let shared = AudioSessionManager()
     
     private var savedCategory: AVAudioSession.Category?
     private var savedMode: AVAudioSession.Mode?

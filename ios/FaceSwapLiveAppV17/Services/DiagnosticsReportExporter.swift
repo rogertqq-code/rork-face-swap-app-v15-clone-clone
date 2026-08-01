@@ -93,6 +93,7 @@ final class DiagnosticsReportExporter {
             }
             line("  • \(pad("Passthrough (real camera)", 34)) \(report.passthrough.status.label.uppercased())")
             line("  • \(pad("Block step (refuses feed)", 34)) \(report.block.status.label.uppercased())")
+            line("  • \(pad("Native AVFoundation → WebRTC", 34)) \(report.nativeWebRTC.status.label.uppercased())")
             line()
 
             // ---- Detail per combination ----
@@ -118,6 +119,19 @@ final class DiagnosticsReportExporter {
                 if !r.notes.isEmpty { line("   Note                : \(r.notes)") }
                 line()
             }
+
+            line("NATIVE AVFOUNDATION → WEBRTC")
+            line(String(repeating: "-", count: 60))
+            line("Status             : \(report.nativeWebRTC.status.label.uppercased())")
+            line("Request ID         : \(report.nativeWebRTC.requestID.isEmpty ? "—" : report.nativeWebRTC.requestID)")
+            line("Video rendered     : \(yn(report.nativeWebRTC.receivedVideo)) (\(report.nativeWebRTC.videoTrackCount) track(s))")
+            line("Audio               : \(report.nativeWebRTC.audioOutcome.isEmpty ? "—" : report.nativeWebRTC.audioOutcome) (\(report.nativeWebRTC.audioTrackCount) track(s))")
+            line("Raw sample mode     : \(report.nativeWebRTC.rawSampleMode.isEmpty ? "—" : report.nativeWebRTC.rawSampleMode)")
+            line("Raw sample files    : \(report.nativeWebRTC.rawSampleFileCount) (\(bytes(report.nativeWebRTC.rawSampleByteCount)))")
+            line("Raw sample verified : \(yn(report.nativeWebRTC.rawSampleVerified))")
+            line("Lifecycle stopped   : \(yn(report.nativeWebRTC.lifecycleStopped))")
+            if !report.nativeWebRTC.error.isEmpty { line("Error               : \(report.nativeWebRTC.error)") }
+            line()
 
             // ---- Passthrough + block ----
             line("PASSTHROUGH")

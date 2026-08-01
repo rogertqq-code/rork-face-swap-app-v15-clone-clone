@@ -2,6 +2,10 @@ import WebKit
 
 /// Serializes all evaluateJavaScript calls to prevent race conditions
 /// from concurrent script evaluations on the same WKWebView.
+private struct UncheckedJavaScriptResult: @unchecked Sendable {
+    let value: Any?
+}
+
 @MainActor
 final class WebRuntimeCoordinator {
     private weak var webView: WKWebView?
@@ -22,12 +26,13 @@ final class WebRuntimeCoordinator {
     }
     
     func evaluate(_ script: String) async throws -> Any? {
-        try await withCheckedThrowingContinuation { continuation in
+        let boxed: UncheckedJavaScriptResult = try await withCheckedThrowingContinuation { continuation in
             evaluate(script) { result, error in
                 if let error { continuation.resume(throwing: error) }
-                else { continuation.resume(returning: result) }
+                else { continuation.resume(returning: UncheckedJavaScriptResult(value: result)) }
             }
         }
+        return boxed.value
     }
     
     private func drainQueue() {

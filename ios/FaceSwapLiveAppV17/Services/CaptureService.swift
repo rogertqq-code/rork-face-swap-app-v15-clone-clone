@@ -4,15 +4,7 @@ import UIKit
 @globalActor
 actor CaptureSessionActor {
     static let shared = CaptureSessionActor()
-    
-    nonisolated let unownedExecutor: UnownedSerialExecutor
-    let queue: DispatchQueue
-    
-    init() {
-        let q = DispatchQueue(label: "com.app.capturesession")
-        self.queue = q
-        self.unownedExecutor = q.asUnownedSerialExecutor()
-    }
+    nonisolated let queue = DispatchQueue(label: "com.app.capturesession")
 }
 
 nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
@@ -166,13 +158,19 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         !availableCameraDevices().isEmpty
     }
 
+    func preparePosition(_ position: AVCaptureDevice.Position) {
+        positionLock.lock()
+        _currentPosition = position
+        positionLock.unlock()
+    }
+
     func start() async throws {
         let granted = await withCheckedContinuation { continuation in
             requestVideoAccess { granted in continuation.resume(returning: granted) }
         }
         guard granted else { throw CaptureError.permissionDenied }
         await MediaResourceCoordinator.shared.acquireLease(for: "CaptureService")
-        await configureAndStartSession()
+        try await configureAndStartSession()
     }
 
     func stop() async {

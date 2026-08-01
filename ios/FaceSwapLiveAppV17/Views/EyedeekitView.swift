@@ -564,7 +564,7 @@ struct EyedeekitView: View {
         captureService.capturePhoto { result in
             Task { @MainActor in
                 isCapturingFrame = false
-                captureService.stop()
+                await captureService.stop()
                 switch result {
                 case .success(let image):
                     if let pending = pendingDocument { model.assignDocument(image, for: pending) }

@@ -34,6 +34,7 @@ nonisolated struct UnifiedDeviceTestResult: Codable, Sendable {
     var methodResults: [DiagMethodResult] = []
     var passthroughResult: DiagPassthroughResult?
     var blockResult: DiagBlockResult?
+    var nativeWebRTCResult: NativeWebRTCDiagnosticResult?
     var recommendedMethod: InjectionMethodKind?
     var recommendedAdjustments: [String] = []
     var summaryLine: String = ""
@@ -200,6 +201,8 @@ final class DeviceTestEngine {
         index += 1
         progressCallback(.diagnosticsSweep, 0.96, "Checking the block step…")
         result.blockResult = await runBlock(webView)
+        progressCallback(.diagnosticsSweep, 0.98, "Rendering the native WebRTC track in the built-in test page…")
+        result.nativeWebRTCResult = await runNativeWebRTCProbe(webView)
         result.methodResults = rows
 
         let candidate = DiagnosticsTestHarness.recommendMethod(from: rows)
@@ -213,6 +216,11 @@ final class DeviceTestEngine {
             results: rows,
             recommended: result.recommendedMethod
         )
+        if let native = result.nativeWebRTCResult {
+            result.summaryLine += native.status == .pass
+                ? " Native WebRTC rendered and stopped successfully."
+                : " Native WebRTC test: \(native.status.label.lowercased())\(native.error.isEmpty ? "." : " — \(native.error)")"
+        }
         progressCallback(.complete, 1.0, "Done — \(result.summaryLine)")
         return result
     }
@@ -576,6 +584,64 @@ final class DeviceTestEngine {
             gumError: err,
             status: refused ? .pass : .fail,
             note: refused ? "Block step correctly refused the live camera request." : "Block step did NOT refuse the request — the feed was served."
+        )
+    }
+
+    private func runNativeWebRTCProbe(_ webView: WKWebView) async -> NativeWebRTCDiagnosticResult {
+        guard let raw = await callProbe(webView, body: DiagnosticsHarnessScripts.nativeWebRTCProbeBody) else {
+            return NativeWebRTCDiagnosticResult(status: .skip, error: "The native WebRTC page probe did not complete.")
+        }
+        func intVal(_ value: Any?) -> Int {
+            if let value = value as? Int { return value }
+            if let value = value as? NSNumber { return value.intValue }
+            return 0
+        }
+        func boolVal(_ value: Any?) -> Bool {
+            if let value = value as? Bool { return value }
+            if let value = value as? NSNumber { return value.boolValue }
+            return false
+        }
+        let pageStatus = DiagTestStatus(rawValue: raw["status"] as? String ?? "") ?? .fail
+        let requestIDText = raw["requestID"] as? String ?? ""
+        let rawSampleMode = raw["rawSampleMode"] as? String ?? ""
+        var sampleCount = 0
+        var sampleBytes = 0
+        var rawSampleVerified = rawSampleMode.isEmpty || rawSampleMode == MediaRawSampleModeKind.off.rawValue
+        if let requestID = UUID(uuidString: requestIDText) {
+            let records = await MediaDeliveryTelemetryStore.shared.records(for: requestID)
+            sampleCount = records.rawSamples.count
+            sampleBytes = records.rawSamples.reduce(0) { $0 + $1.byteCount }
+            rawSampleVerified = !records.rawSamples.isEmpty && records.rawSamples.allSatisfy { record in
+                guard record.byteCount > 0,
+                      let rawData = try? Data(contentsOf: record.rawFileURL),
+                      rawData.count == record.byteCount,
+                      let metadataData = try? Data(contentsOf: record.metadataFileURL),
+                      let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
+                      (metadata["byteCount"] as? NSNumber)?.intValue == record.byteCount,
+                      (metadata["requestID"] as? String) == requestID.uuidString else {
+                    return false
+                }
+                return true
+            }
+        }
+        let status: DiagTestStatus = pageStatus == .pass && rawSampleVerified ? .pass : .fail
+        var error = raw["error"] as? String ?? ""
+        if pageStatus == .pass && !rawSampleVerified {
+            error = "Native video rendered, but the requested raw sample and metadata sidecar were not persisted correctly."
+        }
+        return NativeWebRTCDiagnosticResult(
+            status: status,
+            requestID: requestIDText,
+            receivedVideo: boolVal(raw["receivedVideo"]),
+            videoTrackCount: intVal(raw["videoTrackCount"]),
+            audioTrackCount: intVal(raw["audioTrackCount"]),
+            audioOutcome: raw["audioOutcome"] as? String ?? "",
+            rawSampleMode: rawSampleMode,
+            rawSampleFileCount: sampleCount,
+            rawSampleByteCount: sampleBytes,
+            rawSampleVerified: rawSampleVerified,
+            lifecycleStopped: boolVal(raw["lifecycleStopped"]),
+            error: error
         )
     }
 
