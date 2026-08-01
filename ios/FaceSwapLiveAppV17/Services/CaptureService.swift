@@ -166,6 +166,12 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         !availableCameraDevices().isEmpty
     }
 
+    func preparePosition(_ position: AVCaptureDevice.Position) {
+        positionLock.lock()
+        _currentPosition = position
+        positionLock.unlock()
+    }
+
     func start() async throws {
         let granted = await withCheckedContinuation { continuation in
             requestVideoAccess { granted in continuation.resume(returning: granted) }

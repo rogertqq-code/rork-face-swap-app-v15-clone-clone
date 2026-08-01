@@ -34,6 +34,7 @@ nonisolated struct UnifiedDeviceTestResult: Codable, Sendable {
     var methodResults: [DiagMethodResult] = []
     var passthroughResult: DiagPassthroughResult?
     var blockResult: DiagBlockResult?
+    var nativeWebRTCResult: NativeWebRTCDiagnosticResult?
     var recommendedMethod: InjectionMethodKind?
     var recommendedAdjustments: [String] = []
     var summaryLine: String = ""
@@ -200,6 +201,8 @@ final class DeviceTestEngine {
         index += 1
         progressCallback(.diagnosticsSweep, 0.96, "Checking the block step…")
         result.blockResult = await runBlock(webView)
+        progressCallback(.diagnosticsSweep, 0.98, "Rendering the native WebRTC track in the built-in test page…")
+        result.nativeWebRTCResult = await runNativeWebRTCProbe(webView)
         result.methodResults = rows
 
         let candidate = DiagnosticsTestHarness.recommendMethod(from: rows)
@@ -213,6 +216,11 @@ final class DeviceTestEngine {
             results: rows,
             recommended: result.recommendedMethod
         )
+        if let native = result.nativeWebRTCResult {
+            result.summaryLine += native.status == .pass
+                ? " Native WebRTC rendered and stopped successfully."
+                : " Native WebRTC test: \(native.status.label.lowercased())\(native.error.isEmpty ? "." : " — \(native.error)")"
+        }
         progressCallback(.complete, 1.0, "Done — \(result.summaryLine)")
         return result
     }
@@ -576,6 +584,34 @@ final class DeviceTestEngine {
             gumError: err,
             status: refused ? .pass : .fail,
             note: refused ? "Block step correctly refused the live camera request." : "Block step did NOT refuse the request — the feed was served."
+        )
+    }
+
+    private func runNativeWebRTCProbe(_ webView: WKWebView) async -> NativeWebRTCDiagnosticResult {
+        guard let raw = await callProbe(webView, body: DiagnosticsHarnessScripts.nativeWebRTCProbeBody) else {
+            return NativeWebRTCDiagnosticResult(status: .skip, error: "The native WebRTC page probe did not complete.")
+        }
+        func intVal(_ value: Any?) -> Int {
+            if let value = value as? Int { return value }
+            if let value = value as? NSNumber { return value.intValue }
+            return 0
+        }
+        func boolVal(_ value: Any?) -> Bool {
+            if let value = value as? Bool { return value }
+            if let value = value as? NSNumber { return value.boolValue }
+            return false
+        }
+        let status = DiagTestStatus(rawValue: raw["status"] as? String ?? "") ?? .fail
+        return NativeWebRTCDiagnosticResult(
+            status: status,
+            requestID: raw["requestID"] as? String ?? "",
+            receivedVideo: boolVal(raw["receivedVideo"]),
+            videoTrackCount: intVal(raw["videoTrackCount"]),
+            audioTrackCount: intVal(raw["audioTrackCount"]),
+            audioOutcome: raw["audioOutcome"] as? String ?? "",
+            rawSampleMode: raw["rawSampleMode"] as? String ?? "",
+            lifecycleStopped: boolVal(raw["lifecycleStopped"]),
+            error: raw["error"] as? String ?? ""
         )
     }
 

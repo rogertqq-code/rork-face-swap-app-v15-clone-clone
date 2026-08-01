@@ -41,6 +41,36 @@ nonisolated enum DiagnosticsHarnessScripts {
     </html>
     """
 
+    static var nativeWebRTCProbeBody: String {
+        return """
+        'use strict';
+        var out={status:'skip',requestID:'',receivedVideo:false,videoTrackCount:0,audioTrackCount:0,audioOutcome:'',rawSampleMode:'firstFrame',lifecycleStopped:false,error:''};
+        var api=window.__fslNativeRTCStep1;
+        if(!api||typeof api.start!=='function'){out.error='native-webrtc-client-unavailable';return JSON.stringify(out);}
+        var stream=null;
+        try{
+          stream=await api.start({video:{facingMode:'user',width:320,height:240,frameRate:15},audio:true,audioPolicy:'compatibilitySilentFallback',rawSampleMode:'firstFrame',timeoutMs:8000});
+          var video=document.getElementById('fslTestVideo');
+          if(!video)throw new Error('diagnostic-video-element-missing');
+          video.muted=true;video.playsInline=true;video.srcObject=stream;
+          try{await video.play();}catch(e){}
+          await new Promise(function(resolve){setTimeout(resolve,1500);});
+          var videoTracks=stream.getVideoTracks();
+          var audioTracks=stream.getAudioTracks();
+          out.requestID=String(stream.__fslNativeRequestId||'');
+          out.videoTrackCount=videoTracks.length;
+          out.audioTrackCount=audioTracks.length;
+          out.audioOutcome=String(stream.__fslAudioOutcome&&stream.__fslAudioOutcome.kind||'');
+          out.receivedVideo=videoTracks.length>0&&videoTracks[0].readyState==='live'&&(video.readyState>=2||video.videoWidth>0);
+          if(out.requestID)await api.stop(out.requestID);
+          await new Promise(function(resolve){setTimeout(resolve,80);});
+          out.lifecycleStopped=!out.requestID||api.activeRequestIDs().indexOf(out.requestID)===-1;
+          out.status=(out.receivedVideo&&out.lifecycleStopped)?'pass':'fail';
+        }catch(error){out.status='fail';out.error=String(error&&error.message||error);try{if(stream)stream.getTracks().forEach(function(track){track.stop();});}catch(e){}}
+        return JSON.stringify(out);
+        """
+    }
+
     /// Reads the environment the test actually ran in (secure context, WebCodecs
     /// availability, user agent). Synchronous; exposed as an async body for a
     /// uniform await path.

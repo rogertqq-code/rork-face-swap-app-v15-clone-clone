@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1B2C3D4E5F60718293A4B5C /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D4E5F60718293A4B5E /* WebRTC */; };
 		XXEF818742DBC5E21282CEXX /* SwiftArgon2 in Frameworks */ = {isa = PBXBuildFile; productRef = XXEE5FB7908B0E789DA819XX /* SwiftArgon2 */; };
 /* End PBXBuildFile section */
 
@@ -56,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1B2C3D4E5F60718293A4B5C /* WebRTC in Frameworks */,
 				XXEF818742DBC5E21282CEXX /* SwiftArgon2 in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -117,6 +119,7 @@
 			);
 			name = FaceSwapLiveAppV17;
 			packageProductDependencies = (
+				A1B2C3D4E5F60718293A4B5E /* WebRTC */,
 				XXEE5FB7908B0E789DA819XX /* SwiftArgon2 */,
 			);
 			productName = FaceSwapLiveAppV17;
@@ -203,6 +206,7 @@
 			mainGroup = 105FC5712E9EAD3100EA8BCF;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				A1B2C3D4E5F60718293A4B5D /* XCRemoteSwiftPackageReference "WebRTC" */,
 				XXAFAF775CF28B67C513BBXX /* XCRemoteSwiftPackageReference "argon2-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -604,6 +608,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		A1B2C3D4E5F60718293A4B5D /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 150.0.0;
+			};
+		};
 		XXAFAF775CF28B67C513BBXX /* XCRemoteSwiftPackageReference "argon2-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/mimiclone/argon2-swift.git";
@@ -615,6 +627,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		A1B2C3D4E5F60718293A4B5E /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1B2C3D4E5F60718293A4B5D /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
 		XXEE5FB7908B0E789DA819XX /* SwiftArgon2 */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = XXAFAF775CF28B67C513BBXX /* XCRemoteSwiftPackageReference "argon2-swift" */;

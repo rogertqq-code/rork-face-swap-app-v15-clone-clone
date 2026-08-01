@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import WebKit
 
 struct BrowserWebContainer: UIViewRepresentable {
@@ -101,12 +102,37 @@ struct BrowserWebContainer: UIViewRepresentable {
         /// Tracks whether this coordinator successfully acquired hardware leases.
         var cameraLeaseHeld = false
         var microphoneLeaseHeld = false
+        private var nativeWebRTCRequestFrames: [UUID: WKFrameInfo] = [:]
+        private var backgroundObserver: NSObjectProtocol?
+        private lazy var nativeWebRTCBridge = NativeWebRTCBridgeCoordinator { [weak self] event in
+            Task { @MainActor [weak self] in
+                self?.deliverNativeWebRTCSignal(event)
+            }
+        }
 
         init(viewModel: BrowserViewModel) {
             self.viewModel = viewModel
+            super.init()
+            backgroundObserver = NotificationCenter.default.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let bridge = self.nativeWebRTCBridge
+                    self.nativeWebRTCRequestFrames.removeAll()
+                    await bridge.stopAll(reason: .backgrounded)
+                }
+            }
         }
 
         func tearDown() {
+            let bridge = nativeWebRTCBridge
+            Task { await bridge.stopAll(reason: .callerStopped) }
+            nativeWebRTCRequestFrames.removeAll()
+            if let backgroundObserver { NotificationCenter.default.removeObserver(backgroundObserver) }
+            backgroundObserver = nil
             progressObservation?.invalidate()
             titleObservation?.invalidate()
             urlObservation?.invalidate()
@@ -216,6 +242,12 @@ struct BrowserWebContainer: UIViewRepresentable {
             if let destination = navigationAction.request.url {
                 if viewModel.shouldBlockCameraCustomScheme(destination) {
                     viewModel.noteCameraCustomSchemeBlocked(destination)
+                    webView.callAsyncJavaScript(
+                        "return window.__fslMediaAdapters && window.__fslMediaAdapters.request('both', label);",
+                        arguments: ["label": "custom-scheme-\(destination.scheme ?? "unknown")"],
+                        in: navigationAction.sourceFrame,
+                        contentWorld: .page
+                    ) { _ in }
                     decisionHandler(.cancel)
                     return
                 }
@@ -256,11 +288,17 @@ struct BrowserWebContainer: UIViewRepresentable {
         }
         
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            let bridge = nativeWebRTCBridge
+            Task { await bridge.stopAll(reason: .interrupted) }
+            nativeWebRTCRequestFrames.removeAll()
             ConnectionLogService.shared.error("WKWebView Web Content process terminated. Initiating recovery.")
             viewModel.handleWebContentProcessTerminated()
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            let bridge = nativeWebRTCBridge
+            Task { await bridge.stopAll(reason: .navigationReplaced) }
+            nativeWebRTCRequestFrames.removeAll()
             viewModel.beginNavigation()
         }
 
@@ -320,25 +358,160 @@ struct BrowserWebContainer: UIViewRepresentable {
             didReceive message: WKScriptMessage,
             replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void
         ) {
-            guard message.name == BrowserWebViewConfigurationFactory.runtimeBridgeName,
-                  let body = message.body as? [String: Any],
+            guard let body = message.body as? [String: Any],
                   let context = viewModel.bridgeContext(for: message.frameInfo) else {
-                replyHandler(nil, "The page is not eligible for a media runtime state.")
+                replyHandler(nil, "The page is not eligible for this media bridge.")
                 return
             }
+            switch message.name {
+            case BrowserWebViewConfigurationFactory.runtimeBridgeName:
+                handleRuntimeReplyMessage(body, context: context, replyHandler: replyHandler)
+            case BrowserWebViewConfigurationFactory.nativeWebRTCBridgeName:
+                handleNativeWebRTCReplyMessage(body, frame: message.frameInfo, context: context, replyHandler: replyHandler)
+            default:
+                replyHandler(nil, "Unknown media bridge.")
+            }
+        }
+
+        private func handleRuntimeReplyMessage(
+            _ body: [String: Any],
+            context: MediaBridgeContext,
+            replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void
+        ) {
             viewModel.noteRuntimeBridgeReady(context: context)
             let reqId = body["reqId"] as? String
             do {
                 let json = try viewModel.runtimeStateJSON()
                 if let reqId {
-                    let replyJSON = "{\"reqId\":\"\(reqId)\",\"state\":\(json)}"
-                    replyHandler(replyJSON, nil)
+                    replyHandler("{\"reqId\":\"\(reqId)\",\"state\":\(json)}", nil)
                 } else {
                     replyHandler(json, nil)
                 }
             } catch {
                 replyHandler(nil, "Failed to serialize media runtime state.")
             }
+        }
+
+        private func handleNativeWebRTCReplyMessage(
+            _ body: [String: Any],
+            frame: WKFrameInfo,
+            context: MediaBridgeContext,
+            replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void
+        ) {
+            guard let action = body["action"] as? String,
+                  let requestText = body["requestId"] as? String,
+                  let requestID = UUID(uuidString: requestText) else {
+                replyHandler(nil, "Invalid native WebRTC action or request ID.")
+                return
+            }
+            switch action {
+            case "start":
+                let values = body["constraints"] as? [String: Any] ?? [:]
+                let width = intValue(values["width"]) ?? 0
+                let height = intValue(values["height"]) ?? 0
+                let dimensions = width > 0 && height > 0 ? MediaDimensions(width: width, height: height) : nil
+                let wantsAudio = boolValue(values["wantsAudio"]) ?? false
+                let audioPolicy = MediaAudioPolicy(rawValue: values["audioPolicy"] as? String ?? "")
+                    ?? (wantsAudio ? .compatibilitySilentFallback : .notRequested)
+                let rawModeKind = MediaRawSampleModeKind(rawValue: values["rawSampleMode"] as? String ?? "") ?? .off
+                let rawSampleMode = MediaRawSampleMode(
+                    kind: rawModeKind,
+                    interval: intValue(values["rawSampleInterval"])
+                )
+                let request = MediaDeliveryRequest(
+                    id: requestID,
+                    navigationSessionID: context.navigationSessionID,
+                    origin: context.origin,
+                    kind: .webRTC,
+                    constraints: MediaDeliveryConstraints(
+                        wantsVideo: boolValue(values["wantsVideo"]) ?? true,
+                        wantsAudio: wantsAudio,
+                        facingMode: MediaFacingMode(rawValue: values["facingMode"] as? String ?? "") ?? .unspecified,
+                        dimensions: dimensions,
+                        frameRate: doubleValue(values["frameRate"]),
+                        audioPolicy: audioPolicy
+                    ),
+                    rawSampleMode: rawSampleMode
+                )
+                nativeWebRTCRequestFrames[requestID] = frame
+                let bridge = nativeWebRTCBridge
+                Task {
+                    do {
+                        let started = try await bridge.startNativeCameraSession(for: request)
+                        var audio: [String: Any] = ["kind": started.audioOutcome.kind.rawValue]
+                        if let reason = started.audioOutcome.reason { audio["reason"] = reason }
+                        replyHandler([
+                            "ok": true,
+                            "requestId": requestText,
+                            "offer": ["type": started.offer.type.rawValue, "sdp": started.offer.sdp],
+                            "audioOutcome": audio,
+                        ], nil)
+                    } catch {
+                        nativeWebRTCRequestFrames.removeValue(forKey: requestID)
+                        replyHandler(nil, error.localizedDescription)
+                    }
+                }
+            case "answer":
+                guard let value = body["answer"] as? [String: Any],
+                      let type = NativeWebRTCSDPType(rawValue: value["type"] as? String ?? ""),
+                      let sdp = value["sdp"] as? String else {
+                    replyHandler(nil, "Invalid SDP answer.")
+                    return
+                }
+                let bridge = nativeWebRTCBridge
+                Task {
+                    do {
+                        try await bridge.setPageAnswer(.init(type: type, sdp: sdp), requestID: requestID)
+                        replyHandler(["ok": true], nil)
+                    } catch { replyHandler(nil, error.localizedDescription) }
+                }
+            case "candidate":
+                guard let value = body["candidate"] as? [String: Any],
+                      let sdp = value["sdp"] as? String else {
+                    replyHandler(nil, "Invalid ICE candidate.")
+                    return
+                }
+                let candidate = NativeWebRTCIceCandidate(
+                    sdp: sdp,
+                    sdpMLineIndex: Int32(intValue(value["sdpMLineIndex"]) ?? 0),
+                    sdpMid: value["sdpMid"] as? String
+                )
+                let bridge = nativeWebRTCBridge
+                Task {
+                    do {
+                        try await bridge.addPageCandidate(candidate, requestID: requestID)
+                        replyHandler(["ok": true], nil)
+                    } catch { replyHandler(nil, error.localizedDescription) }
+                }
+            case "active":
+                let bridge = nativeWebRTCBridge
+                Task { await bridge.markActive(requestID: requestID); replyHandler(["ok": true], nil) }
+            case "stop":
+                nativeWebRTCRequestFrames.removeValue(forKey: requestID)
+                let bridge = nativeWebRTCBridge
+                Task { await bridge.stop(requestID: requestID); replyHandler(["ok": true], nil) }
+            default:
+                replyHandler(nil, "Unsupported native WebRTC action.")
+            }
+        }
+
+        private func deliverNativeWebRTCSignal(_ event: NativeWebRTCSignalEvent) {
+            guard let frame = nativeWebRTCRequestFrames[event.requestID], let webView else { return }
+            var payload: [String: Any] = ["kind": event.kind.rawValue, "requestID": event.requestID.uuidString]
+            if let candidate = event.candidate {
+                var candidatePayload: [String: Any] = [
+                    "sdp": candidate.sdp,
+                    "sdpMLineIndex": candidate.sdpMLineIndex,
+                ]
+                if let sdpMid = candidate.sdpMid { candidatePayload["sdpMid"] = sdpMid }
+                payload["candidate"] = candidatePayload
+            }
+            webView.callAsyncJavaScript(
+                "return window.__fslNativeRTCStep1 && window.__fslNativeRTCStep1.receiveSignal(event);",
+                arguments: ["event": payload],
+                in: frame,
+                contentWorld: .page
+            ) { _ in }
         }
 
         struct CameraMessageBody: Codable {
@@ -420,6 +593,16 @@ struct BrowserWebContainer: UIViewRepresentable {
         private func intValue(_ value: Any?) -> Int? {
             if let number = value as? NSNumber { return number.intValue }
             return value as? Int
+        }
+
+        private func doubleValue(_ value: Any?) -> Double? {
+            if let number = value as? NSNumber { return number.doubleValue }
+            return value as? Double
+        }
+
+        private func boolValue(_ value: Any?) -> Bool? {
+            if let number = value as? NSNumber { return number.boolValue }
+            return value as? Bool
         }
     }
 }
