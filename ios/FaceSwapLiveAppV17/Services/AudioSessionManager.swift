@@ -9,7 +9,7 @@ final class AudioSessionManager: @unchecked Sendable {
     private var savedOptions: AVAudioSession.CategoryOptions?
     private var isManagedActive = false
 
-    private init() {}
+    nonisolated private init() {}
 
     /// Activates the audio session with the desired configuration, saving the prior state.
     func activate(category: AVAudioSession.Category, mode: AVAudioSession.Mode, options: AVAudioSession.CategoryOptions = []) {

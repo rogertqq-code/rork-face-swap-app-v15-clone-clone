@@ -128,7 +128,7 @@ struct DiagnosticsHarnessWebView: UIViewRepresentable {
             replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void
         ) {
             if message.name == BrowserWebViewConfigurationFactory.runtimeBridgeName {
-                replyHandler(MediaRuntimeState.idle().serializedJSON(), nil)
+                replyHandler(try? MediaRuntimeState.idle().serializedJSON(), nil)
                 return
             }
             guard message.name == BrowserWebViewConfigurationFactory.nativeWebRTCBridgeName else {

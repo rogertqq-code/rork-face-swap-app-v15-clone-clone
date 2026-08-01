@@ -112,7 +112,7 @@ nonisolated struct NativeWebRTCSignalEvent: Codable, Sendable, Hashable, Identif
 nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate, @unchecked Sendable {
     typealias EventSink = @Sendable (NativeWebRTCSignalEvent) -> Void
 
-    private static let factory: RTCPeerConnectionFactory = {
+    private nonisolated(unsafe) static let factory: RTCPeerConnectionFactory = {
         RTCInitializeSSL()
         return RTCPeerConnectionFactory(
             encoderFactory: RTCDefaultVideoEncoderFactory(),

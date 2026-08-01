@@ -4,15 +4,7 @@ import UIKit
 @globalActor
 actor CaptureSessionActor {
     static let shared = CaptureSessionActor()
-    
-    nonisolated let unownedExecutor: UnownedSerialExecutor
-    let queue: DispatchQueue
-    
-    init() {
-        let q = DispatchQueue(label: "com.app.capturesession")
-        self.queue = q
-        self.unownedExecutor = q.asUnownedSerialExecutor()
-    }
+    static let queue = DispatchQueue(label: "com.app.capturesession")
 }
 
 nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
@@ -105,7 +97,7 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         // synchronous so we dispatch to the session queue and fire-and-forget
         // the async lease release — both are best-effort cleanup.
         let captureSession = session
-        CaptureSessionActor.shared.queue.async {
+        CaptureSessionActor.queue.async {
             if captureSession.isRunning { captureSession.stopRunning() }
         }
         Task { await MediaResourceCoordinator.shared.releaseLease(for: "CaptureService") }
@@ -269,7 +261,7 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         photoTimeoutWorkItem = timeout
         completionLock.unlock()
 
-        CaptureSessionActor.shared.queue.asyncAfter(deadline: .now() + .seconds(12), execute: timeout)
+        CaptureSessionActor.queue.asyncAfter(deadline: .now() + .seconds(12), execute: timeout)
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
 

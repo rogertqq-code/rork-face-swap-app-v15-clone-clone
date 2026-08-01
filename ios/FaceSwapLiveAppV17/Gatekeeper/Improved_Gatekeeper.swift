@@ -424,7 +424,7 @@ actor HardenedAccessValidator {
 /// Thread-safe holder for the monitor task so `deinit` (a nonisolated context)
 /// can cancel it without touching main-actor state. `Task.cancel()` is safe to
 /// call from any thread, so the lock only guards the reference itself.
-private final class MonitorTaskBox: @unchecked Sendable {
+private nonisolated final class MonitorTaskBox: @unchecked Sendable {
     private let lock = NSLock()
     private var task: Task<Void, Never>?
 
