@@ -207,7 +207,7 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
             ],
             optionalConstraints: nil
         )
-        let offer = try await withCheckedThrowingContinuation { continuation in
+        let offer = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RTCSessionDescription, any Error>) in
             peerConnection.offer(for: constraints) { description, error in
                 if let error {
                     continuation.resume(throwing: MediaDeliveryContractError.signalingFailed(error.localizedDescription))
@@ -224,7 +224,7 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
 
     func setRemoteDescription(_ description: NativeWebRTCSessionDescription) async throws {
         try ensureOpen()
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             peerConnection.setRemoteDescription(description.rtcDescription) { error in
                 if let error {
                     continuation.resume(throwing: MediaDeliveryContractError.signalingFailed(error.localizedDescription))
@@ -234,11 +234,7 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
             }
         }
         
-        stateLock.lock()
-        isRemoteDescriptionSet = true
-        let pending = pendingIceCandidates
-        pendingIceCandidates.removeAll()
-        stateLock.unlock()
+        let pending = drainPendingCandidates()
         
         for candidate in pending {
             emit(kind: .localCandidate, candidate: candidate)
@@ -247,7 +243,7 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
 
     func addRemoteCandidate(_ candidate: NativeWebRTCIceCandidate) async throws {
         try ensureOpen()
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             peerConnection.add(candidate.rtcCandidate) { error in
                 if let error {
                     continuation.resume(throwing: MediaDeliveryContractError.signalingFailed(error.localizedDescription))
@@ -303,7 +299,7 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
     }
 
     private func setLocalDescription(_ description: RTCSessionDescription) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             peerConnection.setLocalDescription(description) { error in
                 if let error {
                     continuation.resume(throwing: MediaDeliveryContractError.signalingFailed(error.localizedDescription))
@@ -312,6 +308,15 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
                 }
             }
         }
+    }
+
+    private func drainPendingCandidates() -> [NativeWebRTCIceCandidate] {
+        stateLock.lock()
+        isRemoteDescriptionSet = true
+        let pending = pendingIceCandidates
+        pendingIceCandidates.removeAll()
+        stateLock.unlock()
+        return pending
     }
 
     private func ensureOpen() throws {
