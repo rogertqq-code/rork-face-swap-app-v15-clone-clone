@@ -1439,6 +1439,7 @@ struct ActivityShareSheet: UIViewControllerRepresentable {
 /// Scrollable viewer for the connection debug log.
 struct ConnectionLogSheet: View {
     @State private var entries: [ConnectionLogService.Entry] = []
+    @State private var refreshTimer: Timer?
 
     var body: some View {
         NavigationStack {
@@ -1469,6 +1470,15 @@ struct ConnectionLogSheet: View {
             }
             .onAppear {
                 entries = ConnectionLogService.shared.entries
+                // E-04: Live-update the viewer every 2 seconds while open so
+                // new entries appear during an active incident.
+                refreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
+                    entries = ConnectionLogService.shared.entries
+                }
+            }
+            .onDisappear {
+                refreshTimer?.invalidate()
+                refreshTimer = nil
             }
         }
         .preferredColorScheme(.dark)

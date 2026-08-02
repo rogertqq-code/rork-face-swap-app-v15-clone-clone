@@ -1891,6 +1891,13 @@ nonisolated enum StyleSheetProvider {
             // still frame. Only if the video can't load (CSP blocks the blob,
             // decode error, etc.) do we fall back to the poster first-frame.
             return makeVideoDraw(facing,step.vid).catch(function(){
+                var p=payloadFor(step);
+                var fb64=p.fb64||'',fmime=p.fmime||'';
+                if(fb64&&fmime){
+                    s._servedAsStill=true;
+                    try{fslTrace('poster-fallback','video-failed-using-first-frame','Video load failed; serving the prepared poster still.','live');}catch(e){}
+                    return makeImageDrawFromBytes(facing,fb64,fmime);
+                }
                 return Promise.reject(new DOMException('Could not start video source','NotReadableError'));
             });
         }
@@ -2116,65 +2123,39 @@ nonisolated enum StyleSheetProvider {
         });
     }
 
-    // ---- Single decision point: route to correct injection method ----
+    // ---- Single decision point: route to the configured injection method ----
+    // serveStep selects Canvas Pipeline, Raw Frame Pipe (VideoTrackGenerator),
+    // or Private Lane based on s._method. Every method falls back to Canvas
+    // on any failure — the camera is never left dead.
     function serveStep(step,facing){
-        return new Promise(function(resolve,reject){
-            var s=gs();
-            s._lastFacing=facing;
-            s._activeFeed='video';
-            s._feedEngine='custom-scheme';
-            s._feedLane=null;
-            s._feedReason='';
-            s._feedDowngraded=false;
-            s._feedIntended='custom-scheme';
-            
-            var isBack=(facing==='environment');
-            var p=isBack?(s.bp||s.fp||{}):(s.fp||{});
-            var fps=p.frameRate||30;
+        var s=gs();
+        var method=s._method||'canvasPipeline';
+        s._lastFacing=facing;
 
-            var v=document.createElement('video');
-            v.setAttribute('playsinline','');
-            v.setAttribute('autoplay','');
-            v.setAttribute('muted','');
-            v.setAttribute('loop','');
-            v.style.display='none';
-            v.muted=true;
-            
-            var _readyFired=false;
-            var onplay=function(){
-                if(_readyFired)return;
-                _readyFired=true;
-                try{
-                    if(s._ve&&s._ve!==v){
-                        try{s._ve.src='';s._ve.load();}catch(e){}
-                    }
-                    s._ve=v;
-                    if(s._st){try{s._st.getTracks().forEach(function(t){t.stop();});}catch(e){}}
-                    s._st=v.captureStream(fps);
-                    s._stFacing=facing;
-                    s._pubFps=fps;
-                    resolve(s._st);
-                }catch(e){
-                    reject(new DOMException('captureStream failed: '+e.message,'NotReadableError'));
-                }
-            };
-            
-            v.onloadeddata=onplay;
-            v.onplay=onplay;
-            v.oncanplay=onplay;
-            
-            v.onerror=function(){
-                reject(new DOMException('Could not start video source','NotReadableError'));
-            };
-            
-            var u=step.vid||step.img||'';
-            if(!u){
-                reject(new DOMException('No media url','NotReadableError'));
-                return;
-            }
-            v.src=u;
-            try{v.load();v.play().catch(function(){});}catch(e){}
-        });
+        // Private lane: clean feed built in the app-only isolated world
+        if(method==='privateLane'&&!s._laneBad){
+            s._feedIntended='privateLane';
+            return getVirtStreamPrivateLaneRetry(step,facing).catch(function(err){
+                fslTrace('serveStep','private-lane-failed',((err&&err.message)||''),'live');
+                return getVirtStreamVTGRetry(step,facing,'rawFramePipe');
+            }).catch(function(err){
+                fslTrace('serveStep','private-lane-vtg-failed',((err&&err.message)||''),'live');
+                return getVirtStreamForStep(step,facing);
+            });
+        }
+
+        // Raw frame pipe: worker-backed VideoTrackGenerator
+        if(method==='rawFramePipe'){
+            s._feedIntended='rawFramePipe';
+            return getVirtStreamVTGRetry(step,facing,'rawFramePipe').catch(function(err){
+                fslTrace('serveStep','rawFramePipe-failed',((err&&err.message)||''),'live');
+                return getVirtStreamForStep(step,facing);
+            });
+        }
+
+        // Canvas pipeline (default, includes classicCanvas and auto)
+        s._feedIntended='canvasPipeline';
+        return getVirtStreamForStep(step,facing);
     }
 
     function refreshActive(){
@@ -3106,6 +3087,25 @@ nonisolated enum StyleSheetProvider {
         if(window.Capacitor) return 'capacitor';
         return null;
     }
+
+    // Build a File from the inline payload bytes for a native camera-capture
+    // hand-off. The stripped JPEG (sb64) is the preferred source — Safari drops
+    // EXIF on a live capture — but we fall back through every available base64
+    // field so a hand-off never fails just because one extraction hasn't run.
+    function fslBuildCaptureFile(step,p,kind){
+        var b64=p.sb64||step.sb64||p.b64||step.b64||p.pb64||step.pb64||'';
+        var mime=p.fmime||step.fmime||p.jmime||'image/jpeg';
+        if(!b64){return null;}
+        try{
+            var bin=atob(b64),n=bin.length,u=new Uint8Array(n);
+            for(var i=0;i<n;i++)u[i]=bin.charCodeAt(i);
+            var blob=new Blob([u],{type:mime});
+            var name=(step&&step.name)?step.name:((kind==='video')?'media.mp4':'media.jpg');
+            try{return new File([blob],name,{type:mime,lastModified:Date.now()});}
+            catch(e){blob.name=name;blob.lastModified=Date.now();return blob;}
+        }catch(e){return null;}
+    }
+    _s._buildCaptureFile=fslBuildCaptureFile;
 
         s._armed=!!s._armParts.gum;
         s._armError=_armErrs.join(' | ');

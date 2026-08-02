@@ -74,7 +74,24 @@ final class ConnectionLogService {
     /// Returns the full log as plain text, one entry per line.
     var exportText: String {
         guard !entries.isEmpty else { return "No connection log entries recorded." }
-        return entries.map(\.formattedLine).joined(separator: "\n")
+        // E-05: Redact page-originated diagnostic strings before export.
+        // Messages are capped at 200 chars and URL-like patterns are masked.
+        return entries.map { redactedLine($0) }.joined(separator: "\n")
+    }
+
+    /// Redacts a single entry for export: caps message length and masks URLs.
+    private func redactedLine(_ entry: Entry) -> String {
+        var msg = entry.message
+        if msg.count > 200 {
+            msg = String(msg.prefix(197)) + "..."
+        }
+        if let regex = try? NSRegularExpression(pattern: "https?://\\S+|fsl\\w+://\\S+", options: []) {
+            let range = NSRange(msg.startIndex..., in: msg)
+            msg = regex.stringByReplacingMatches(in: msg, options: [], range: range, withTemplate: "[url]")
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return "[\(formatter.string(from: entry.timestamp))] [\(entry.category.rawValue.uppercased())] \(msg)"
     }
 
     /// Writes the current log to a temporary file and returns its URL for
@@ -126,7 +143,8 @@ final class ConnectionLogService {
         let delta = newEntries.map(\.formattedLine).joined(separator: "\n")
         lastFlushedCount = entries.count
 
-        // Rotate if the existing file is too large.
+        // E-02: Rotate if the existing file is too large BEFORE appending,
+        // and cap the delta size so a single flush cannot exceed the limit.
         if let attrs = try? FileManager.default.attributesOfItem(atPath: logURL.path),
            let size = attrs[.size] as? Int, size > maxFileSize {
             try? FileManager.default.removeItem(at: logURL)
@@ -144,16 +162,25 @@ final class ConnectionLogService {
                 try? handle.close()
             }
         }
+
+        // E-02: Post-write rotation check — if the file exceeded the limit
+        // after this append, rotate now so the next cycle starts clean.
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: logURL.path),
+           let size = attrs[.size] as? Int, size > maxFileSize {
+            try? FileManager.default.removeItem(at: logURL)
+        }
     }
 
     private func loadExistingEntries() {
         guard let data = try? Data(contentsOf: logURL),
               let text = String(data: data, encoding: .utf8) else { return }
         // Parse previously persisted lines back into in-memory entries so the
-        // session history survives an app restart.
+        // session history survives an app restart. Cap at maxEntries so a
+        // large persisted log cannot exceed the in-memory bound on startup.
         let lines = text.split(separator: "\n")
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var parsed: [Entry] = []
         for line in lines {
             // Expected format: [timestamp] [CATEGORY] message
             guard line.hasPrefix("[") else { continue }
@@ -169,7 +196,13 @@ final class ConnectionLogService {
             let message = String(afterCatBracket[afterCatBracket.index(after: catClose)...]).trimmingCharacters(in: .whitespaces)
             let category = Category(rawValue: catStr) ?? .info
             let date = formatter.date(from: timestampStr) ?? Date()
-            entries.append(Entry(timestamp: date, category: category, message: message))
+            parsed.append(Entry(timestamp: date, category: category, message: message))
         }
+        // E-02: Enforce the in-memory cap on loaded entries.
+        if parsed.count > maxEntries {
+            parsed = Array(parsed.suffix(maxEntries))
+        }
+        entries = parsed
+        lastFlushedCount = entries.count
     }
 }

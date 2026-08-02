@@ -185,13 +185,15 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         _currentPosition = (_currentPosition == .front) ? .back : .front
         let newPosition = _currentPosition
         positionLock.unlock()
-        
+
+        // F-01: Defer the position-changed callback until after reconfiguration
+        // completes so the UI reflects the actual hardware state. The name
+        // update in the callback reads the real active device name.
         Task {
             try? await configureAndStartSession()
-        }
-        
-        DispatchQueue.main.async { [weak self] in
-            self?.onPositionChanged?(newPosition)
+            DispatchQueue.main.async { [weak self] in
+                self?.onPositionChanged?(newPosition)
+            }
         }
     }
 
