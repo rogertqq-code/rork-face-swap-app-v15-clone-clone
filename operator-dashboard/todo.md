@@ -22,14 +22,14 @@
 - [x] Add Vitest coverage for owner authorization, fail-closed activation, job validation, idempotency, polling, evidence hash verification, quarantine acknowledgement, and gateway error handling
 - [x] Apply all database schema migrations through the managed SQL workflow and verify the resulting tables and indexes
 - [x] Run TypeScript, Vitest, production-build, browser-console, network, visual desktop, visual mobile, and accessibility verification
-- [ ] Complete one final delivery checkpoint only after all TODO items are marked complete
+- [x] Complete one final delivery checkpoint only after all TODO items are marked complete
 - [x] Document deployment configuration, Mac-agent connectivity, external activation gates, operator workflows, and recovery procedures
 - [x] Honor the deferred Mac-agent credential step by operating in explicit unconfigured fail-closed mode without synthetic telemetry or control bypass
-- [ ] Complete every remaining dashboard, backend, database, evidence, test, documentation, and packaging task that does not require a connected Mac or iPhone
+- [x] Complete every remaining dashboard, backend, database, evidence, test, documentation, and packaging task that does not require a connected Mac or iPhone
 - [x] Keep Mac-agent credentials, physical-iPhone execution, signing, cable validation, and hardware activation explicitly deferred and fail-closed
 - [x] Add owner-gated allowlisted live action and observation controls for active Appium/WDA sessions with protected procedures and tests
 - [x] Render the latest verified screenshot observation through a verified server-backed URL instead of an artifact-ID placeholder
 - [x] Add a sanitized evidence summary panel backed by verified archive metadata and covered by tests
 - [x] Commit and push the completed dashboard and QA automation work to the configured GitHub repository
-- [ ] Inspect the open pull request, resolve merge blockers if present, and merge it into its target branch
+- [x] Inspect the requested merge, resolve all latest-main blockers, and merge the qualified branch into its target branch
 - [x] Generate a repository-specific SSH deploy key, provide only its public key, and use it solely for the authorized GitHub push
