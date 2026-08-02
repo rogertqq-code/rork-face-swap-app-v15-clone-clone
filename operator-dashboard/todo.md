@@ -30,5 +30,6 @@
 - [x] Add owner-gated allowlisted live action and observation controls for active Appium/WDA sessions with protected procedures and tests
 - [x] Render the latest verified screenshot observation through a verified server-backed URL instead of an artifact-ID placeholder
 - [x] Add a sanitized evidence summary panel backed by verified archive metadata and covered by tests
-- [ ] Commit and push the completed dashboard and QA automation work to the configured GitHub repository
+- [x] Commit and push the completed dashboard and QA automation work to the configured GitHub repository
 - [ ] Inspect the open pull request, resolve merge blockers if present, and merge it into its target branch
+- [x] Generate a repository-specific SSH deploy key, provide only its public key, and use it solely for the authorized GitHub push
