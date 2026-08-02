@@ -46,13 +46,17 @@ struct AnalyzeSiteView: View {
                         Image(systemName: "arrow.clockwise")
                     }
                     .disabled(viewModel.currentURL == nil || viewModel.isAnalyzingSite)
+                    .accessibilityIdentifier("browser.siteCheck.refresh")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                        .accessibilityIdentifier("browser.siteCheck.close")
                 }
             }
         }
         .preferredColorScheme(.dark)
+        .accessibilityIdentifier("browser.siteCheck.screen")
+        .accessibilityValue("host=\(host);analyzing=\(viewModel.isAnalyzingSite);engine=\(viewModel.engineArmed);media=\(viewModel.isMediaActive);method=\(viewModel.activeInjectionProfile.rawValue)")
         .sheet(item: $reportToShow) { report in
             InjectionInspectionReportDetailView(report: report)
         }
@@ -86,6 +90,8 @@ struct AnalyzeSiteView: View {
                 Spacer(minLength: 0)
             }
         }
+        .accessibilityIdentifier("browser.siteCheck.status")
+        .accessibilityValue(statusDetail)
     }
 
     private var statusDetail: String {
@@ -141,6 +147,8 @@ struct AnalyzeSiteView: View {
                 )
             }
         }
+        .accessibilityIdentifier("browser.siteCheck.liveEngine")
+        .accessibilityValue("armed=\(viewModel.engineArmed);media=\(viewModel.isMediaActive);route=\(viewModel.activeMethodDisplayName);action=\(lastActionText)")
     }
 
     private var routeDetail: String {
@@ -237,6 +245,8 @@ struct AnalyzeSiteView: View {
                 }
             }
             .tint(DS.accent)
+            .accessibilityIdentifier("browser.siteCheck.recorder.enabled")
+            .accessibilityValue(recorder.isEnabled ? "on" : "off")
 
             if recorder.isEnabled {
                 if recorder.records.isEmpty {
@@ -282,6 +292,7 @@ struct AnalyzeSiteView: View {
                         }
                         .buttonStyle(.bordered)
                         .tint(DS.accent)
+                        .accessibilityIdentifier("browser.siteCheck.recorder.copy")
 
                         Button(role: .destructive) {
                             recorder.clear()
@@ -293,6 +304,7 @@ struct AnalyzeSiteView: View {
                                 .padding(.vertical, 8)
                         }
                         .buttonStyle(.bordered)
+                        .accessibilityIdentifier("browser.siteCheck.recorder.clear")
                     }
                 }
             }
@@ -379,6 +391,8 @@ struct AnalyzeSiteView: View {
             Haptics.success()
             viewModel.confirmRecommendedProfile()
         }
+        .accessibilityIdentifier("browser.siteCheck.recommendation.apply")
+        .accessibilityValue(detected.recommendedProfile.rawValue)
 
         Divider()
         SiteOutcomeControl(viewModel: viewModel)
@@ -449,6 +463,8 @@ struct AnalyzeSiteView: View {
                     .background(reportColor(report).opacity(0.08), in: .rect(cornerRadius: 10))
                 }
                 .buttonStyle(.dsPress)
+                .accessibilityIdentifier("browser.siteCheck.report")
+                .accessibilityValue("id=\(report.id.uuidString);risk=\(report.riskScore);blocked=\(report.blockedCount);warnings=\(report.warningCount)")
             } else if viewModel.isAnalyzingSite {
                 DSEmptyState(icon: "shield.lefthalf.filled", title: "Inspecting\u{2026}", message: "Checking how this site loads and guards camera media.")
             } else {
@@ -520,5 +536,6 @@ struct AnalyzeSiteView: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("browser.siteCheck.detectionGuide")
     }
 }

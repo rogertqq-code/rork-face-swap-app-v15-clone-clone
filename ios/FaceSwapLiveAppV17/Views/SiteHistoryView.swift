@@ -39,6 +39,7 @@ struct SiteHistoryView: View {
                             .foregroundStyle(.red)
                     }
                     .disabled(siteHistory.entries.isEmpty)
+                    .accessibilityIdentifier("diagnostics.siteHistory.clear")
                 }
             }
             .confirmationDialog(
@@ -49,12 +50,16 @@ struct SiteHistoryView: View {
                 Button("Clear History", role: .destructive) {
                     siteHistory.clearHistory()
                 }
+                .accessibilityIdentifier("diagnostics.siteHistory.clear.confirm")
                 Button("Cancel", role: .cancel) {}
+                    .accessibilityIdentifier("diagnostics.siteHistory.clear.cancel")
             } message: {
                 Text("This permanently removes every recorded site visit. This can't be undone.")
             }
         }
         .preferredColorScheme(.dark)
+        .accessibilityIdentifier("diagnostics.siteHistory.screen")
+        .accessibilityValue("entries=\(siteHistory.entries.count);sites=\(siteHistory.uniqueSites().count)")
     }
 
     private func siteSection(_ site: String) -> some View {
@@ -132,5 +137,7 @@ struct SiteHistoryView: View {
             }
         }
         .padding(.vertical, 2)
+        .accessibilityIdentifier("diagnostics.siteHistory.entry.\(entry.id.uuidString)")
+        .accessibilityValue("site=\(entry.siteURL);success=\(entry.wasSuccessful);profile=\(entry.profileUsed)")
     }
 }

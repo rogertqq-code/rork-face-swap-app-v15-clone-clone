@@ -58,20 +58,25 @@ struct MyVideosView: View {
                         } label: {
                             Label("Import Image", systemImage: "photo")
                         }
+                        .accessibilityIdentifier("media.import.image.menu")
                         Button {
                             isVideoPickerPresented = true
                         } label: {
                             Label("Import Video", systemImage: "video")
                         }
+                        .accessibilityIdentifier("media.import.video.menu")
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
                     }
+                    .accessibilityIdentifier("media.import.menu")
                     .accessibilityLabel("Add Media")
                     .disabled(isImporting)
                 }
             }
         }
+        .accessibilityIdentifier("media.screen")
+        .accessibilityValue("count=\(videoLibrary.videos.count);filter=\(selectedTab.rawValue);importing=\(isImporting)")
         .photosPicker(isPresented: $isImagePickerPresented, selection: $imagePickerItem, matching: .images)
         .photosPicker(isPresented: $isVideoPickerPresented, selection: $videoPickerItem, matching: .videos)
         .onChange(of: imagePickerItem) { _, item in
@@ -88,7 +93,9 @@ struct MyVideosView: View {
                     videoLibrary.deleteVideo(media)
                 }
             }
+            .accessibilityIdentifier("media.delete.confirm")
             Button("Cancel", role: .cancel) {}
+                .accessibilityIdentifier("media.delete.cancel")
         } message: { media in
             Text("This will permanently remove \"\(media.name)\" and all generated variants.")
         }
@@ -97,13 +104,16 @@ struct MyVideosView: View {
             set: { if !$0 { renamingMedia = nil } }
         )) {
             TextField("Name", text: $renameText)
+                .accessibilityIdentifier("media.rename.input")
             Button("Save") {
                 if let media = renamingMedia, !renameText.trimmingCharacters(in: .whitespaces).isEmpty {
                     videoLibrary.renameVideo(media, to: renameText.trimmingCharacters(in: .whitespaces))
                 }
                 renamingMedia = nil
             }
+            .accessibilityIdentifier("media.rename.save")
             Button("Cancel", role: .cancel) { renamingMedia = nil }
+                .accessibilityIdentifier("media.rename.cancel")
         }
         .onAppear {
             constraintLog.reload()
@@ -148,6 +158,7 @@ struct MyVideosView: View {
                         .padding(.vertical, 13)
                         .background(.teal, in: Capsule())
                 }
+                .accessibilityIdentifier("media.import.image.empty")
                 PhotosPicker(selection: $videoPickerItem, matching: .videos) {
                     Label("Video", systemImage: "video")
                         .font(.headline)
@@ -156,6 +167,7 @@ struct MyVideosView: View {
                         .padding(.vertical, 13)
                         .background(.blue, in: Capsule())
                 }
+                .accessibilityIdentifier("media.import.video.empty")
             }
             .padding(.top, 8)
             Spacer()
@@ -171,6 +183,8 @@ struct MyVideosView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .accessibilityIdentifier("media.filter")
+            .accessibilityValue(selectedTab.rawValue)
             .padding(.horizontal)
             .padding(.top, 10)
 
@@ -217,6 +231,8 @@ struct MyVideosView: View {
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(.rect(cornerRadius: 14))
+        .accessibilityIdentifier("media.import.progress")
+        .accessibilityValue("progress=\(importProgress);status=\(importStatus)")
     }
 
     private func mediaCard(_ media: SavedVideo) -> some View {
@@ -264,6 +280,8 @@ struct MyVideosView: View {
             .clipShape(.rect(cornerRadius: 14))
         }
         .buttonStyle(.dsPress)
+        .accessibilityIdentifier("media.item.\(media.id.uuidString)")
+        .accessibilityValue("name=\(media.name);type=\(media.isImage ? "image" : "video");variants=\(media.allVariants.count)")
         .contextMenu {
             Button {
                 renameText = media.name
@@ -271,12 +289,14 @@ struct MyVideosView: View {
             } label: {
                 Label("Rename", systemImage: "pencil")
             }
+            .accessibilityIdentifier("media.item.rename.\(media.id.uuidString)")
             Button(role: .destructive) {
                 mediaToDelete = media
                 showDeleteConfirm = true
             } label: {
                 Label("Delete", systemImage: "trash")
             }
+            .accessibilityIdentifier("media.item.delete.\(media.id.uuidString)")
         }
     }
 

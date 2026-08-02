@@ -63,6 +63,19 @@ struct NativeWebRTCContractTests {
         #expect(engine.contains("nativeWebRTCResult"))
     }
 
+    @Test func captureServiceUsesExplicitActorOwnedShutdown() throws {
+        let source = try String(contentsOf: sourceURL("Services/CaptureService.swift"), encoding: .utf8)
+
+        #expect(source.contains("func shutdown() async"))
+        #expect(source.contains("stopSessionForShutdown"))
+        #expect(source.contains("lifecycleGeneration"))
+        #expect(source.contains("await shutdown()"))
+        #expect(!source.contains("asUnownedSerialExecutor"))
+        #expect(!source.contains("CaptureSessionActor.shared.queue"))
+        #expect(!source.contains("CaptureSessionActor.queue"))
+        #expect(!source.contains("captureSession.stopRunning()"))
+    }
+
     @Test func nativeDiagnosticResultRoundTripsThroughReportJSON() throws {
         let native = NativeWebRTCDiagnosticResult(
             status: .pass,

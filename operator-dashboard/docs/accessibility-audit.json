@@ -1,0 +1,25 @@
+{
+  "capturedAt": "2026-08-02T13:09:55.851Z",
+  "viewport": {
+    "width": 768,
+    "height": 1024
+  },
+  "semantics": {
+    "interactiveCount": 30,
+    "missingNames": []
+  },
+  "keyboard": {
+    "uniqueTabStops": 20,
+    "focusVisibilityFailures": []
+  },
+  "contrast": {
+    "audited": 165,
+    "failures": []
+  },
+  "layout": {
+    "viewportWidth": 753,
+    "scrollWidth": 753,
+    "horizontalOverflow": false
+  },
+  "passed": true
+}

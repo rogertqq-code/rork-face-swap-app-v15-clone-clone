@@ -7,6 +7,9 @@ struct BrowserContentView: View {
     @FocusState private var isURLBarFocused: Bool
     @Environment(OfflineVerificationStore.self) private var verificationStore
     @Environment(\.scenePhase) private var scenePhase
+#if QA_AUTOMATION
+    @EnvironmentObject private var qaRuntime: QAAutomationRuntime
+#endif
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,6 +22,7 @@ struct BrowserContentView: View {
             bottomToolbar
         }
         .background(Color(.systemBackground))
+        .accessibilityIdentifier("browser.screen")
         .sheet(isPresented: $viewModel.showOverlayPanel) {
             OverlayControlSheet(viewModel: viewModel)
         }
@@ -118,6 +122,14 @@ struct BrowserContentView: View {
             viewModel.onActiveProfileUpdated = { updatedProfile in
                 profileManager.updateProfile(updatedProfile)
             }
+#if QA_AUTOMATION
+            qaRuntime.applicationAdapter.attachBrowser(viewModel)
+#endif
+        }
+        .onDisappear {
+#if QA_AUTOMATION
+            qaRuntime.applicationAdapter.detachBrowser(viewModel)
+#endif
         }
         .onChange(of: profileManager.activeProfileID) { _, _ in
             viewModel.activeProfile = profileManager.activeProfile
@@ -154,6 +166,8 @@ struct BrowserContentView: View {
                         viewModel.navigateTo(viewModel.urlText)
                         isURLBarFocused = false
                     }
+                    .accessibilityIdentifier("browser.urlField")
+                    .accessibilityValue(viewModel.currentURL?.absoluteString ?? viewModel.urlText)
 
                 if !viewModel.urlText.isEmpty && isURLBarFocused {
                     Button {
@@ -163,6 +177,7 @@ struct BrowserContentView: View {
                             .font(.system(size: 14))
                             .foregroundStyle(.tertiary)
                     }
+                    .accessibilityIdentifier("browser.urlClear")
                     .padding(.trailing, 4)
                 }
             }
@@ -179,6 +194,7 @@ struct BrowserContentView: View {
                     }
                 }
                 .font(.system(size: 15))
+                .accessibilityIdentifier("browser.urlCancel")
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
@@ -198,6 +214,8 @@ struct BrowserContentView: View {
             }
         }
         .frame(height: 2)
+        .accessibilityIdentifier("browser.progress")
+        .accessibilityValue(String(viewModel.estimatedProgress))
     }
 
     private var browserContent: some View {
@@ -212,6 +230,8 @@ struct BrowserContentView: View {
                 overlayLayer
             }
         }
+        .accessibilityIdentifier("browser.webContent")
+        .accessibilityValue(viewModel.currentURL?.absoluteString ?? "startPage")
     }
 
     private var startPage: some View {
@@ -268,6 +288,8 @@ struct BrowserContentView: View {
         }
         .padding(12)
         .background(Color.green.opacity(0.1), in: .rect(cornerRadius: 10))
+        .accessibilityIdentifier("browser.media.banner")
+        .accessibilityValue("active=true;sequenceCount=\(viewModel.sequence.count)")
     }
 
     private var bookmarksGrid: some View {
@@ -359,6 +381,7 @@ struct BrowserContentView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+        .accessibilityIdentifier("browser.quickLink.\(subtitle.replacingOccurrences(of: ".", with: "_"))")
     }
 
     private var overlayLayer: some View {
@@ -399,6 +422,7 @@ struct BrowserContentView: View {
                     toolbarIcon("chevron.backward")
                 }
                 .disabled(viewModel.currentURL == nil)
+                .accessibilityIdentifier("browser.back")
             }
 
             toolbarSlot {
@@ -406,6 +430,7 @@ struct BrowserContentView: View {
                     toolbarIcon("chevron.forward")
                 }
                 .disabled(!viewModel.canGoForward)
+                .accessibilityIdentifier("browser.forward")
             }
 
             toolbarSlot { serveMediaToggle }
@@ -425,7 +450,9 @@ struct BrowserContentView: View {
                         }
                     }
                 }
+                .accessibilityIdentifier("browser.media.list")
                 .accessibilityLabel("Media list")
+                .accessibilityValue("count=\(viewModel.sequence.count)")
             }
 
             toolbarSlot { nextMediaButton }
@@ -484,6 +511,7 @@ struct BrowserContentView: View {
             }
             .frame(width: 44, height: 44)
         }
+        .accessibilityIdentifier("browser.media.toggle")
         .accessibilityLabel("Serve media")
         .accessibilityValue(isActive ? "On" : "Off")
         .accessibilityHint(isPreparing ? "Preparing the camera engine" : (isBlocked ? "A request was blocked" : ""))
@@ -517,7 +545,9 @@ struct BrowserContentView: View {
             .frame(width: 44, height: 44)
         }
         .disabled(!canAdvance)
+        .accessibilityIdentifier("browser.media.next")
         .accessibilityLabel("Next Media")
+        .accessibilityValue("pointer=\(viewModel.pointer);count=\(viewModel.sequence.count)")
         .accessibilityHint("Advance to the next media item in the sequence")
     }
 
@@ -529,6 +559,7 @@ struct BrowserContentView: View {
                 Label("Site Check", systemImage: "scope")
             }
             .disabled(viewModel.currentURL == nil)
+            .accessibilityIdentifier("browser.siteCheck")
 
             Divider()
 
@@ -537,6 +568,7 @@ struct BrowserContentView: View {
             } label: {
                 Label("Burn All Data", systemImage: "flame.fill")
             }
+            .accessibilityIdentifier("browser.clearAllData")
         } label: {
             ZStack {
                 toolbarIcon("ellipsis.circle")
@@ -547,6 +579,7 @@ struct BrowserContentView: View {
                 }
             }
         }
+        .accessibilityIdentifier("browser.moreMenu")
     }
 
     private func requestNoticeBanner(
@@ -580,6 +613,8 @@ struct BrowserContentView: View {
         .padding(.top, 12)
         .transition(.move(edge: .top).combined(with: .opacity))
         .zIndex(3)
+        .accessibilityIdentifier("browser.requestNotice")
+        .accessibilityValue(message)
     }
 
     private func toolbarIcon(_ name: String) -> some View {

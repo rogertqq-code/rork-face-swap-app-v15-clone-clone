@@ -1,14 +1,6 @@
-//
-//  FaceSwapLiveAppV17UITestsLaunchTests.swift
-//  FaceSwapLiveAppV17UITests
-//
-//  Created by Rork on February 22, 2026.
-//
-
 import XCTest
 
 final class FaceSwapLiveAppV17UITestsLaunchTests: XCTestCase {
-
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true
     }
@@ -18,16 +10,25 @@ final class FaceSwapLiveAppV17UITestsLaunchTests: XCTestCase {
     }
 
     @MainActor
-    func testLaunch() throws {
-        let app = XCUIApplication()
-        app.launch()
+    func testDeterministicQALaunchScreenshot() throws {
+        let harness = QAUITestHarness()
+        try harness.launch()
+        defer { harness.terminate() }
 
-        // Insert steps here to perform after app launch but before taking a screenshot,
-        // such as logging into a test account or navigating somewhere in the app
+        XCTAssertTrue(harness.waitForElement("qa.banner").exists)
+        XCTAssertTrue(harness.waitForElement("browser.screen").exists)
+        XCTAssertEqual(harness.probeValue("qa.value.lastError"), "none")
 
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "Launch Screen"
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        let screenshot = XCTAttachment(screenshot: harness.app.screenshot())
+        screenshot.name = "QA Launch - \(harness.runMode.rawValue) - \(harness.runID.uuidString)"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        let state = XCTAttachment(
+            string: "runID=\(harness.runID.uuidString)\nrunMode=\(harness.runMode.rawValue)\nfeatures=\(harness.probeValue("qa.value.featureMatrix"))"
+        )
+        state.name = "QA Launch State"
+        state.lifetime = .keepAlways
+        add(state)
     }
 }

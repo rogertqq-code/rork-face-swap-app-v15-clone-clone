@@ -1,0 +1,34 @@
+# Project TODO
+
+- [x] Define a typed dashboard domain model for device health, activation policy, jobs, live sessions, traces, recoveries, evidence artifacts, quarantine, and GitHub checks
+- [x] Define the secure Mac-agent integration boundary with strict loopback/relay configuration, request timeouts, bounded payloads, and deterministic error mapping
+- [x] Preserve Manus OAuth authentication and require an authenticated session for every dashboard route
+- [x] Enforce owner-only admin authorization for every operator query and mutation without any privilege-elevation path
+- [x] Persist operator audit events, submitted jobs, live sessions, evidence metadata, policy snapshots, and quarantine actions in the database
+- [x] Implement a strictly fail-closed activation gate that blocks all device, job, live-session, evidence, and quarantine operations when required policy checks are absent or failing
+- [x] Implement live Mac-agent health queries for worker state, queue depth, active job, active live session, Appium state, and exact cable-device readiness
+- [x] Implement protected job submission for canary, launch, tabs, browser, media, diagnostics, recovery, hardware, and all scenarios
+- [x] Keep a deterministic idempotency key visible at all times on the job submission form and send it with every submission
+- [x] Implement retry validation, strict device UDID validation, submission confirmation, and duplicate-submission handling
+- [x] Implement live job polling with status, phase, elapsed time, bounded structured log tail, cancellation, and terminal-state handling
+- [x] Implement Appium/WebDriverAgent live-session state, BiDi status, action stream, observation stream, guarded live actions, and screenshot observation support
+- [x] Implement root-trace browsing with W3C traceparent, correlated timeline events, recovery episodes, and analytics invariant results
+- [x] Implement evidence archive browsing with sanitized summaries, SHA-256 verified inventory, and per-file download links surfaced only after verification
+- [x] Implement quarantine status, reason display, manual/runner-maintenance/device-maintenance set forms, and exact acknowledgement-gated clear action
+- [x] Implement GitHub fail-closed policy status with per-check pass/fail badges and an external activation checklist
+- [x] Build a responsive dark cyberpunk dashboard using the provided DashboardLayout, neon status indicators, monospace telemetry typography, and reduced-motion-safe live pulses
+- [x] Add explicit loading, empty, offline, unauthorized, forbidden, blocked, error, and stale-connection states across every panel
+- [x] Add accessible labels, keyboard navigation, focus states, contrast-safe colors, and responsive desktop/tablet/mobile layouts
+- [x] Add Vitest coverage for owner authorization, fail-closed activation, job validation, idempotency, polling, evidence hash verification, quarantine acknowledgement, and gateway error handling
+- [x] Apply all database schema migrations through the managed SQL workflow and verify the resulting tables and indexes
+- [x] Run TypeScript, Vitest, production-build, browser-console, network, visual desktop, visual mobile, and accessibility verification
+- [ ] Complete one final delivery checkpoint only after all TODO items are marked complete
+- [x] Document deployment configuration, Mac-agent connectivity, external activation gates, operator workflows, and recovery procedures
+- [x] Honor the deferred Mac-agent credential step by operating in explicit unconfigured fail-closed mode without synthetic telemetry or control bypass
+- [ ] Complete every remaining dashboard, backend, database, evidence, test, documentation, and packaging task that does not require a connected Mac or iPhone
+- [x] Keep Mac-agent credentials, physical-iPhone execution, signing, cable validation, and hardware activation explicitly deferred and fail-closed
+- [x] Add owner-gated allowlisted live action and observation controls for active Appium/WDA sessions with protected procedures and tests
+- [x] Render the latest verified screenshot observation through a verified server-backed URL instead of an artifact-ID placeholder
+- [x] Add a sanitized evidence summary panel backed by verified archive metadata and covered by tests
+- [ ] Commit and push the completed dashboard and QA automation work to the configured GitHub repository
+- [ ] Inspect the open pull request, resolve merge blockers if present, and merge it into its target branch

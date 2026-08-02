@@ -38,6 +38,8 @@ struct LivePreviewView: View {
             }
         }
         .animation(.spring(duration: 0.3), value: viewModel.showCaptureFlash)
+        .accessibilityIdentifier("preview.screen")
+        .accessibilityValue("capture=\(viewModel.captureService.session.isRunning ? "running" : "stopped");camera=\(viewModel.activeCameraName);overlay=\(viewModel.isActive);captures=\(viewModel.capturedImages.count)")
         .statusBarHidden()
         .sheet(isPresented: $viewModel.showImageSelection) {
             ImageSelectionSheet { image in
@@ -51,6 +53,7 @@ struct LivePreviewView: View {
         }
         .alert("No Face Detected", isPresented: $viewModel.showNoResultAlert) {
             Button("OK") {}
+                .accessibilityIdentifier("preview.error.dismiss")
         } message: {
             Text("No face was found in the selected photo. Please try a different photo with a clear, front-facing face.")
         }
@@ -201,6 +204,7 @@ struct LivePreviewView: View {
                         .background(.ultraThinMaterial, in: Circle())
                 }
                 .buttonStyle(.dsPress)
+                .accessibilityIdentifier("preview.source.clear")
                 .transition(.scale.combined(with: .opacity))
             }
 
@@ -216,6 +220,8 @@ struct LivePreviewView: View {
                     .background(.ultraThinMaterial, in: Circle())
             }
             .buttonStyle(.dsPress)
+            .accessibilityIdentifier("preview.debug.toggle")
+            .accessibilityValue(viewModel.showDebugOverlay ? "on" : "off")
 
             Button { viewModel.switchPosition() } label: {
                 Image(systemName: "arrow.triangle.2.circlepath")
@@ -225,6 +231,8 @@ struct LivePreviewView: View {
                     .background(.ultraThinMaterial, in: Circle())
             }
             .buttonStyle(.dsPress)
+            .accessibilityIdentifier("preview.camera.flip")
+            .accessibilityValue(viewModel.activeCameraName)
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -257,6 +265,8 @@ struct LivePreviewView: View {
         .padding(.top, 8)
         .animation(.spring(duration: 0.3), value: viewModel.activeCameraName)
         .animation(.spring(duration: 0.3), value: viewModel.isFrontPosition)
+        .accessibilityIdentifier("preview.camera.position")
+        .accessibilityValue(viewModel.activeCameraName)
     }
 
     private var selectPrompt: some View {
@@ -272,6 +282,7 @@ struct LivePreviewView: View {
             .padding(.vertical, 14)
             .background(.ultraThinMaterial, in: Capsule())
         }
+        .accessibilityIdentifier("preview.source.selectPrompt")
     }
 
     private var bottomBar: some View {
@@ -297,6 +308,7 @@ struct LivePreviewView: View {
             }
             .buttonStyle(.dsPress)
             .frame(width: 60)
+            .accessibilityIdentifier("preview.source.select")
 
             Spacer()
 
@@ -311,6 +323,8 @@ struct LivePreviewView: View {
                 }
             }
             .buttonStyle(CaptureButtonStyle())
+            .accessibilityIdentifier("preview.capture")
+            .accessibilityValue(viewModel.isActive ? "ready" : "noSource")
             .sensoryFeedback(.impact(weight: .medium), trigger: viewModel.showCaptureFlash)
 
             Spacer()
@@ -339,6 +353,8 @@ struct LivePreviewView: View {
             }
             .buttonStyle(.dsPress)
             .frame(width: 60)
+            .accessibilityIdentifier("preview.gallery")
+            .accessibilityValue("count=\(viewModel.capturedImages.count)")
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 20)

@@ -51,12 +51,16 @@ struct ProfileSelectionView: View {
                         profileManager.deleteProfile(profile)
                     }
                 }
+                .accessibilityIdentifier("profile.delete.confirm")
                 Button("Cancel", role: .cancel) {}
+                    .accessibilityIdentifier("profile.delete.cancel")
             } message: { profile in
                 Text("This will permanently remove \"\(profile.name)\" and all its device data.")
             }
         }
         .preferredColorScheme(.dark)
+        .accessibilityIdentifier("profile.screen")
+        .accessibilityValue("activeProfile=\(profileManager.activeProfileID?.uuidString ?? "none");count=\(profileManager.profiles.count);onboarding=\(isOnboarding)")
     }
 
     private var headerSection: some View {
@@ -171,6 +175,8 @@ struct ProfileSelectionView: View {
                 }
                 .padding(14)
             }
+            .accessibilityIdentifier("profile.card.\(profile.id.uuidString)")
+            .accessibilityValue("name=\(profile.name);active=\(isActive);expanded=\(isExpanded);verification=\(verificationStatus.title)")
 
             if isExpanded {
                 expandedDetails(profile, isActive: isActive)
@@ -230,6 +236,7 @@ struct ProfileSelectionView: View {
                                 .foregroundStyle(.black)
                         }
                         .buttonStyle(.dsPress)
+                        .accessibilityIdentifier("profile.select.\(profile.id.uuidString)")
                     } else if isOnboarding {
                         Button {
                             onProfileSelected()
@@ -242,6 +249,7 @@ struct ProfileSelectionView: View {
                                 .foregroundStyle(.black)
                         }
                         .buttonStyle(.dsPress)
+                        .accessibilityIdentifier("profile.continue.\(profile.id.uuidString)")
                     } else {
                         Label("Active Profile", systemImage: "checkmark.seal.fill")
                             .font(.subheadline.weight(.semibold))
@@ -267,6 +275,8 @@ struct ProfileSelectionView: View {
                     .buttonStyle(.dsPress)
                     .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 10))
                     .disabled(recalibratingProfileID != nil)
+                    .accessibilityIdentifier("profile.recalibrate.\(profile.id.uuidString)")
+                    .accessibilityValue(recalibratingProfileID == profile.id ? calibrationStatus : "ready")
 
                     Button(role: .destructive) {
                         profileToDelete = profile
@@ -278,6 +288,7 @@ struct ProfileSelectionView: View {
                             .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 10))
                     }
                     .buttonStyle(.dsPress)
+                    .accessibilityIdentifier("profile.delete.\(profile.id.uuidString)")
                 }
                 .padding(.top, 4)
 
@@ -292,6 +303,7 @@ struct ProfileSelectionView: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(.cyan)
+                    .accessibilityIdentifier("profile.verify.\(profile.id.uuidString)")
 
                     NavigationLink {
                         OfflineVerificationReportView(profile: profile, store: verificationStore)
@@ -303,6 +315,7 @@ struct ProfileSelectionView: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(.secondary)
+                    .accessibilityIdentifier("profile.report.\(profile.id.uuidString)")
                 }
             }
             .padding(14)
@@ -337,6 +350,8 @@ struct ProfileSelectionView: View {
         }
         .padding(10)
         .background(tint.opacity(0.09), in: .rect(cornerRadius: 10))
+        .accessibilityIdentifier("profile.verificationStatus.\(profile.id.uuidString)")
+        .accessibilityValue(status.title)
     }
 
     private func verificationColor(for name: String) -> Color {
@@ -463,5 +478,6 @@ struct ProfileSelectionView: View {
             .background(Color(.secondarySystemGroupedBackground))
             .clipShape(.rect(cornerRadius: 14))
         }
+        .accessibilityIdentifier("profile.create")
     }
 }

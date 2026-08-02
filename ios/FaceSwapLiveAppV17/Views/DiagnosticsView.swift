@@ -6,6 +6,9 @@ import WebKit
 struct DiagnosticsView: View {
     @Environment(DeviceProfileManager.self) private var profileManager
     @Environment(OfflineVerificationStore.self) private var verificationStore
+#if QA_AUTOMATION
+    @EnvironmentObject private var qaRuntime: QAAutomationRuntime
+#endif
     @State private var diagnosticsService = DiagnosticsService()
     @State private var fingerprintService = FingerprintService()
     @State private var constraintLog = ConstraintLogService()
@@ -73,9 +76,18 @@ struct DiagnosticsView: View {
             .onAppear {
                 siteMemory.reload()
                 privateLaneProbe.loadCachedForCurrentSite()
+#if QA_AUTOMATION
+                qaRuntime.applicationAdapter.attachDiagnostics(harness)
+#endif
+            }
+            .onDisappear {
+#if QA_AUTOMATION
+                qaRuntime.applicationAdapter.detachDiagnostics(harness)
+#endif
             }
         }
         .preferredColorScheme(.dark)
+        .accessibilityIdentifier("diagnostics.screen")
         .sheet(isPresented: $showShareSheet) {
             if let url = reportExporter.lastExportURL {
                 ActivityShareSheet(activityItems: [url])
@@ -132,6 +144,7 @@ struct DiagnosticsView: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(.cyan)
+                    .accessibilityIdentifier("diagnostics.verification.run")
 
                     NavigationLink {
                         OfflineVerificationReportView(profile: profile, store: verificationStore)
@@ -142,6 +155,7 @@ struct DiagnosticsView: View {
                             .padding(.vertical, 8)
                     }
                     .buttonStyle(.bordered)
+                    .accessibilityIdentifier("diagnostics.verification.report")
                 }
             } else {
                 Text("Create a device profile before running offline verification.")
@@ -162,6 +176,8 @@ struct DiagnosticsView: View {
             if harness.isRunning {
                 ProgressView(value: harness.progress)
                     .tint(DS.accent)
+                    .accessibilityIdentifier("diagnostics.fullTest.progress")
+                    .accessibilityValue(String(harness.progress))
                 Text(harness.progressLabel)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -174,6 +190,7 @@ struct DiagnosticsView: View {
                 ) {
                     Task { await harness.runFullTest(profileManager: profileManager, verificationStore: verificationStore) }
                 }
+                .accessibilityIdentifier("diagnostics.fullTest.run")
             }
 
             if !harness.lastError.isEmpty {
@@ -181,6 +198,8 @@ struct DiagnosticsView: View {
                     .font(.caption2)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("diagnostics.fullTest.error")
+                    .accessibilityValue(harness.lastError)
             }
 
             if let report = harness.latestReport {
@@ -226,6 +245,8 @@ struct DiagnosticsView: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
+        .accessibilityIdentifier("diagnostics.fullTest.summary")
+        .accessibilityValue("pass=\(report.passCount);warn=\(report.warnCount);fail=\(report.failCount);recommended=\(report.recommendedMethodRaw);summary=\(report.summaryLine)")
     }
 
     private func verificationTint(_ name: String) -> Color {
@@ -264,6 +285,7 @@ struct DiagnosticsView: View {
             ) {
                 Task { await fixService.fixInjection() }
             }
+            .accessibilityIdentifier("diagnostics.fix.injection")
             DSActionButton(
                 title: fixService.isFixingTrusted ? "Checking…" : "Fix Trusted-Browser",
                 icon: "checkmark.shield.fill",
@@ -273,6 +295,7 @@ struct DiagnosticsView: View {
             ) {
                 Task { await fixService.fixTrustedBrowser(profile: profileManager.activeProfile) }
             }
+            .accessibilityIdentifier("diagnostics.fix.trustedBrowser")
         }
     }
 
@@ -322,6 +345,7 @@ struct DiagnosticsView: View {
                 if url != nil { showShareSheet = true }
             }
         }
+        .accessibilityIdentifier("diagnostics.exportLog")
     }
 
     // MARK: - Connection log viewer/export
@@ -365,6 +389,7 @@ struct DiagnosticsView: View {
                 }
                 .buttonStyle(.bordered)
                 .tint(DS.accent)
+                .accessibilityIdentifier("diagnostics.connectionLog.view")
 
                 Button {
                     if let url = ConnectionLogService.shared.exportToFile() {
@@ -379,6 +404,7 @@ struct DiagnosticsView: View {
                 }
                 .buttonStyle(.bordered)
                 .tint(DS.good)
+                .accessibilityIdentifier("diagnostics.connectionLog.export")
 
                 Button(role: .destructive) {
                     ConnectionLogService.shared.clear()
@@ -389,6 +415,7 @@ struct DiagnosticsView: View {
                         .padding(.vertical, 8)
                 }
                 .buttonStyle(.bordered)
+                .accessibilityIdentifier("diagnostics.connectionLog.clear")
             }
         }
     }
@@ -420,6 +447,8 @@ struct DiagnosticsView: View {
                 Toggle("", isOn: $store.isEnabled)
                     .labelsHidden()
                     .tint(DS.good)
+                    .accessibilityIdentifier("diagnostics.sensorRealism.toggle")
+                    .accessibilityValue(store.isEnabled ? "on" : "off")
             }
         }
     }
@@ -443,6 +472,8 @@ struct DiagnosticsView: View {
                 siteHistorySection
             }
         }
+        .accessibilityIdentifier("diagnostics.advanced.toggle")
+        .accessibilityValue(advancedExpanded ? "expanded" : "collapsed")
     }
 
     // MARK: - Camera Comparison

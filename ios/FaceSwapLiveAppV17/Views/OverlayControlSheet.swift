@@ -44,13 +44,19 @@ struct OverlayControlSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    if !viewModel.sequence.isEmpty { EditButton() }
+                    if !viewModel.sequence.isEmpty {
+                        EditButton()
+                            .accessibilityIdentifier("browser.controls.sequence.edit")
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                        .accessibilityIdentifier("browser.controls.close")
                 }
             }
         }
+        .accessibilityIdentifier("browser.controls.sheet")
+        .accessibilityValue("sequenceCount=\(viewModel.sequence.count);pointer=\(viewModel.pointer);media=\(viewModel.isMediaActive);method=\(viewModel.activeInjectionProfile.rawValue)")
         .sheet(isPresented: $showAnalyze) {
             AnalyzeSiteView(viewModel: viewModel)
         }
@@ -63,7 +69,9 @@ struct OverlayControlSheet: View {
                 viewModel.resetInjectionDefaults()
                 didReset = true
             }
+            .accessibilityIdentifier("browser.controls.reset.confirm")
             Button("Cancel", role: .cancel) {}
+                .accessibilityIdentifier("browser.controls.reset.cancel")
         } message: {
             Text("Clears every saved per-site camera answer, turns Ask Me off, and forgets learned per-site methods. Your media list, saved sequences and bookmarks are untouched.")
         }
@@ -93,30 +101,38 @@ struct OverlayControlSheet: View {
         }
         .alert("Camera Capture", isPresented: $isCameraErrorPresented) {
             Button("OK", role: .cancel) {}
+                .accessibilityIdentifier("browser.controls.cameraError.dismiss")
             Button("Open Settings") {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
                 UIApplication.shared.open(url)
             }
+            .accessibilityIdentifier("browser.controls.cameraError.settings")
         } message: {
             Text(cameraErrorMessage)
         }
         .alert("Save Sequence", isPresented: $showSaveSequencePrompt) {
             TextField("Name", text: $saveName)
+                .accessibilityIdentifier("browser.controls.saveSequence.name")
             Button("Save") {
                 viewModel.saveCurrentSequence(name: saveName, asTemplate: false)
                 saveName = ""
             }
+            .accessibilityIdentifier("browser.controls.saveSequence.confirm")
             Button("Cancel", role: .cancel) { saveName = "" }
+                .accessibilityIdentifier("browser.controls.saveSequence.cancel")
         } message: {
             Text("Stores the exact list with its photo and video files so you can reload it later.")
         }
         .alert("Save Template", isPresented: $showSaveTemplatePrompt) {
             TextField("Name", text: $saveName)
+                .accessibilityIdentifier("browser.controls.saveTemplate.name")
             Button("Save") {
                 viewModel.saveCurrentSequence(name: saveName, asTemplate: true)
                 saveName = ""
             }
+            .accessibilityIdentifier("browser.controls.saveTemplate.confirm")
             Button("Cancel", role: .cancel) { saveName = "" }
+                .accessibilityIdentifier("browser.controls.saveTemplate.cancel")
         } message: {
             Text("Stores only the ordered placeholders — no media — as a reusable template.")
         }
@@ -255,6 +271,8 @@ struct OverlayControlSheet: View {
     private var profileSection: some View {
         Section {
             InjectionProfilePicker(viewModel: viewModel)
+                .accessibilityIdentifier("browser.controls.injectionProfile")
+                .accessibilityValue(viewModel.activeInjectionProfile.rawValue)
         } header: {
             Text("Injection Method")
         } footer: {
@@ -298,6 +316,7 @@ struct OverlayControlSheet: View {
                 }
             }
             .disabled(viewModel.currentURL == nil)
+            .accessibilityIdentifier("browser.controls.analyzeSite")
         } header: {
             Text("Site Intelligence")
         } footer: {
@@ -324,6 +343,8 @@ struct OverlayControlSheet: View {
                 }
             }
             .pickerStyle(.segmented)
+            .accessibilityIdentifier("browser.controls.advanceMode")
+            .accessibilityValue(viewModel.advanceMode.rawValue)
 
             Picker("When the list ends", selection: Binding(
                 get: { viewModel.endBehavior },
@@ -331,6 +352,8 @@ struct OverlayControlSheet: View {
             )) {
                 ForEach(SequenceEndBehavior.allCases) { Text($0.label).tag($0) }
             }
+            .accessibilityIdentifier("browser.controls.endBehavior")
+            .accessibilityValue(viewModel.endBehavior.rawValue)
         } header: {
             Text("How requests advance")
         } footer: {
@@ -369,6 +392,7 @@ struct OverlayControlSheet: View {
                             } label: {
                                 Label("Remove", systemImage: "trash")
                             }
+                            .accessibilityIdentifier("browser.controls.sequence.remove.\(step.id.uuidString)")
                         }
                 }
                 .onMove { source, destination in
@@ -384,6 +408,7 @@ struct OverlayControlSheet: View {
                 } label: {
                     Label("Reset position", systemImage: "arrow.counterclockwise")
                 }
+                .accessibilityIdentifier("browser.controls.sequence.resetPosition")
 
                 Button(role: .destructive) {
                     viewModel.clearSequence()
@@ -392,6 +417,7 @@ struct OverlayControlSheet: View {
                 } label: {
                     Label("Clear & restore real camera", systemImage: "xmark.circle.fill")
                 }
+                .accessibilityIdentifier("browser.controls.sequence.clear")
             }
         } header: {
             HStack {
@@ -430,6 +456,7 @@ struct OverlayControlSheet: View {
                 } label: {
                     Label("Pick from Library", systemImage: "photo.on.rectangle")
                 }
+                .accessibilityIdentifier("browser.controls.add.photo.library")
                 // Show Take Photo when either system camera UI or AVFoundation
                 // can capture; takePhoto() picks the best available path.
                 if CameraCaptureView.isCameraAvailable || CaptureService.isCameraAvailable {
@@ -439,6 +466,7 @@ struct OverlayControlSheet: View {
                         Label("Take Photo", systemImage: "camera.fill")
                     }
                     .disabled(isCapturingFrame)
+                    .accessibilityIdentifier("browser.controls.add.photo.camera")
                 }
                 if CaptureService.isCameraAvailable {
                     Button {
@@ -447,11 +475,13 @@ struct OverlayControlSheet: View {
                         Label("Capture Frame", systemImage: "viewfinder")
                     }
                     .disabled(isCapturingFrame)
+                    .accessibilityIdentifier("browser.controls.add.photo.captureFrame")
                 }
             } label: {
                 Label("Add Photo", systemImage: "photo.badge.plus")
             }
             Button("Add Video") { addAndPickVideo() }
+                .accessibilityIdentifier("browser.controls.add.video")
             Divider()
             // Ready-made steps reserved for one request surface, so a flow can be
             // laid out in the exact order a site will ask.
@@ -476,11 +506,15 @@ struct OverlayControlSheet: View {
             }
             Divider()
             Button("Block WebRTC Once") { viewModel.addStep(kind: .webRTCBlock) }
+                .accessibilityIdentifier("browser.controls.add.webRTCBlock")
             Button("Stream Block") { viewModel.addStep(kind: .block) }
+                .accessibilityIdentifier("browser.controls.add.streamBlock")
         } label: {
             Label("Add Step", systemImage: "plus.circle.fill")
         }
         .disabled(!viewModel.canAddStep)
+        .accessibilityIdentifier("browser.controls.sequence.add")
+        .accessibilityValue("count=\(viewModel.sequence.count);limit=\(maxSequenceSteps)")
     }
 
     private func stepRow(_ step: SequenceStep, index: Int) -> some View {
@@ -543,6 +577,7 @@ struct OverlayControlSheet: View {
                             Button { chooseVideo(for: step.id) } label: {
                                 Label("Choose Video", systemImage: "video")
                             }
+                            .accessibilityIdentifier("browser.controls.step.video.\(step.id.uuidString)")
                         }
                     }
                     .buttonStyle(.bordered)
@@ -554,6 +589,8 @@ struct OverlayControlSheet: View {
         }
         .padding(.vertical, 2)
         .listRowBackground(isLive ? Color.green.opacity(0.12) : Color(.secondarySystemGroupedBackground))
+        .accessibilityIdentifier("browser.controls.step.\(step.id.uuidString)")
+        .accessibilityValue("index=\(index);kind=\(step.kind.rawValue);live=\(isLive);placeholder=\(step.isPlaceholder);surface=\(step.requestSurface.rawValue)")
     }
 
     private func thumbnail(_ step: SequenceStep) -> some View {
@@ -604,6 +641,8 @@ struct OverlayControlSheet: View {
             .padding(.vertical, 3)
             .background((isBlocked ? Color.red : Color.green).opacity(0.12), in: .capsule)
         }
+        .accessibilityIdentifier("browser.controls.step.liveCamera.\(step.id.uuidString)")
+        .accessibilityValue(step.liveCamera.rawValue)
     }
 
     /// Which kind of camera request this step answers. "Either" is the default and
@@ -637,6 +676,8 @@ struct OverlayControlSheet: View {
             .padding(.vertical, 3)
             .background(tint.opacity(0.12), in: .capsule)
         }
+        .accessibilityIdentifier("browser.controls.step.surface.\(step.id.uuidString)")
+        .accessibilityValue(surface.rawValue)
     }
 
     private func blockModeMenu(_ step: SequenceStep) -> some View {
@@ -663,6 +704,8 @@ struct OverlayControlSheet: View {
             .padding(.vertical, 3)
             .background(.red.opacity(0.12), in: .capsule)
         }
+        .accessibilityIdentifier("browser.controls.step.blockMode.\(step.id.uuidString)")
+        .accessibilityValue(step.blockMode.rawValue)
     }
 
 
@@ -692,6 +735,7 @@ struct OverlayControlSheet: View {
         } label: {
             Label("Choose Photo", systemImage: "photo")
         }
+        .accessibilityIdentifier("browser.controls.step.photo.\(stepID.uuidString)")
     }
 
     private func stepTitle(_ step: SequenceStep) -> String {
@@ -729,6 +773,8 @@ struct OverlayControlSheet: View {
                 set: { viewModel.setMediaActive($0) }
             ))
             .disabled(!viewModel.hasServableStep)
+            .accessibilityIdentifier("browser.controls.mediaEnabled")
+            .accessibilityValue(viewModel.isMediaActive ? "on" : "off")
 
             if !viewModel.hasServableStep {
                 Text("Add at least one photo, video, or block step to start serving media.")
@@ -778,6 +824,8 @@ struct OverlayControlSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .accessibilityIdentifier("browser.controls.cameraRequests")
+            .accessibilityValue(viewModel.cameraPrompt.settings.enabledKindsSummary)
 
         } header: {
             Text("Media Source")
@@ -824,16 +872,19 @@ struct OverlayControlSheet: View {
                 } label: {
                     Label("Save as Sequence", systemImage: "square.and.arrow.down")
                 }
+                .accessibilityIdentifier("browser.controls.library.saveSequence")
                 Button {
                     saveName = ""
                     showSaveTemplatePrompt = true
                 } label: {
                     Label("Save as Template", systemImage: "square.and.arrow.down.on.square")
                 }
+                .accessibilityIdentifier("browser.controls.library.saveTemplate")
             } label: {
                 Label("Save…", systemImage: "square.and.arrow.down")
             }
             .disabled(viewModel.sequence.isEmpty)
+            .accessibilityIdentifier("browser.controls.library.saveMenu")
 
             ForEach(viewModel.sequenceLibrary.saved) { record in
                 Button {
@@ -843,12 +894,15 @@ struct OverlayControlSheet: View {
                 } label: {
                     savedRow(record)
                 }
+                .accessibilityIdentifier("browser.controls.library.saved.\(record.id.uuidString)")
+                .accessibilityValue("name=\(record.name);template=\(record.isTemplate);steps=\(record.steps.count)")
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
                         viewModel.deleteSaved(record)
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
+                    .accessibilityIdentifier("browser.controls.library.delete.\(record.id.uuidString)")
                 }
             }
 
@@ -875,6 +929,7 @@ struct OverlayControlSheet: View {
                 }
             }
             .disabled(!viewModel.canAddStep)
+            .accessibilityIdentifier("browser.controls.library.addMedia")
         } header: {
             Text("Saved & Library")
         } footer: {
@@ -912,6 +967,8 @@ struct OverlayControlSheet: View {
                 set: { SdkInterceptionStore.shared.isEnabled = $0 }
             ))
             .disabled(!viewModel.hasServableStep)
+            .accessibilityIdentifier("browser.controls.sdkInterception")
+            .accessibilityValue(SdkInterceptionStore.shared.isEnabled ? "on" : "off")
 
             if SdkInterceptionStore.shared.isEnabled {
                 HStack(spacing: 8) {
@@ -945,11 +1002,15 @@ struct OverlayControlSheet: View {
         Section {
             Toggle("Visual Overlay", isOn: $viewModel.isOverlayActive)
                 .disabled(!viewModel.hasMedia)
+                .accessibilityIdentifier("browser.controls.visualOverlay")
+                .accessibilityValue(viewModel.isOverlayActive ? "on" : "off")
 
             if viewModel.isOverlayActive {
                 HStack {
                     Text("Opacity").font(.subheadline)
                     Slider(value: $viewModel.overlayOpacity, in: 0.1...1.0, step: 0.05)
+                        .accessibilityIdentifier("browser.controls.overlayOpacity")
+                        .accessibilityValue(String(viewModel.overlayOpacity))
                 }
             }
         } header: {
@@ -986,6 +1047,8 @@ struct OverlayControlSheet: View {
                     Spacer(minLength: 0)
                 }
             }
+            .accessibilityIdentifier("browser.controls.reset")
+            .accessibilityValue(didReset ? "completed" : "ready")
         } header: {
             Text("Troubleshooting")
         } footer: {
@@ -1003,6 +1066,8 @@ struct OverlayControlSheet: View {
                 Spacer()
             }
             .listRowBackground(Color.clear)
+            .accessibilityIdentifier("browser.controls.version")
+            .accessibilityValue(AppVersion.shortLabel)
         }
     }
 }
@@ -1033,6 +1098,7 @@ struct MyVideosSequenceSheet: View {
                                     Label("Add All Variants", systemImage: "rectangle.stack.badge.plus")
                                 }
                                 .tint(.blue)
+                                .accessibilityIdentifier("browser.controls.mediaPicker.all.\(media.id.uuidString)")
 
                                 ForEach(media.allVariants) { variant in
                                     Button {
@@ -1041,6 +1107,7 @@ struct MyVideosSequenceSheet: View {
                                     } label: {
                                         Label("Add \(variant.target.label) · \(variant.specLabel)", systemImage: variant.kind == .image ? "photo" : "video.fill")
                                     }
+                                    .accessibilityIdentifier("browser.controls.mediaPicker.variant.\(variant.id.uuidString)")
                                 }
                             } else if media.isVideo {
                                 if let url = videoLibrary.frontVideoURL(for: media) ?? videoLibrary.backVideoURL(for: media) {
@@ -1051,6 +1118,7 @@ struct MyVideosSequenceSheet: View {
                                         Label("Add step", systemImage: "plus.circle.fill")
                                     }
                                     .tint(.blue)
+                                    .accessibilityIdentifier("browser.controls.mediaPicker.video.\(media.id.uuidString)")
                                 }
                             } else {
                                 Text("Generate a variant in My Media before adding this image to the sequence.")
@@ -1078,9 +1146,11 @@ struct MyVideosSequenceSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .accessibilityIdentifier("browser.controls.mediaPicker.cancel")
                 }
             }
         }
+        .accessibilityIdentifier("browser.controls.mediaPicker")
     }
 
 

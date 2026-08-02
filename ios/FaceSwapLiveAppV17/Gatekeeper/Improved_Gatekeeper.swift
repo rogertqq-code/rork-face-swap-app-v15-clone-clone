@@ -712,6 +712,7 @@ private struct GatekeeperBootView: View {
                     .foregroundStyle(.white.opacity(0.82))
             }
         }
+        .accessibilityIdentifier("gatekeeper.boot")
     }
 }
 
@@ -767,6 +768,7 @@ private struct GatekeeperGateView: View {
                                 .shadow(color: index < gatekeeper.enteredCode.count ? .white.opacity(0.35) : .clear, radius: 8)
                         }
                     }
+                    .accessibilityIdentifier("gatekeeper.code")
                     .accessibilityLabel("Six digit code entry")
                     .accessibilityValue("\(gatekeeper.enteredCode.count) digits entered")
 
@@ -830,6 +832,8 @@ private struct GatekeeperGateView: View {
                 Spacer(minLength: 18)
             }
         }
+        .accessibilityIdentifier("gatekeeper.screen")
+        .accessibilityValue("digits=\(gatekeeper.enteredCode.count);validating=\(gatekeeper.isValidating);message=\(gatekeeper.message ?? "")")
     }
 }
 
@@ -851,6 +855,7 @@ private struct GatekeeperKeyButton: View {
         }
         .buttonStyle(.plain)
         .contentShape(.rect(cornerRadius: 22))
+        .accessibilityIdentifier("gatekeeper.key.\(title)")
         .accessibilityLabel("Digit \(title)")
     }
 }
@@ -869,6 +874,7 @@ private struct GatekeeperUtilityButton: View {
         }
         .buttonStyle(.plain)
         .contentShape(.rect(cornerRadius: 22))
+        .accessibilityIdentifier("gatekeeper.key.delete")
         .accessibilityLabel("Delete digit")
     }
 }
@@ -887,6 +893,7 @@ private struct GatekeeperSessionPill: View {
                     .background(.white.opacity(0.14), in: .circle)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("gatekeeper.lock")
             .accessibilityLabel("Lock now")
 
             Text(remainingTimeText)
@@ -901,6 +908,8 @@ private struct GatekeeperSessionPill: View {
             Capsule().stroke(.white.opacity(0.12), lineWidth: 0.5)
         }
         .shadow(color: .black.opacity(0.28), radius: 8, y: 3)
+        .accessibilityIdentifier("gatekeeper.session")
+        .accessibilityValue(remainingTimeText)
     }
 }
 
@@ -927,6 +936,7 @@ private struct GatekeeperPrivacyShield: View {
             .padding(28)
         }
         .ignoresSafeArea()
+        .accessibilityIdentifier("gatekeeper.privacyShield")
     }
 }
 

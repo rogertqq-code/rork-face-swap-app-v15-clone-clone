@@ -21,6 +21,8 @@ struct CameraRequestPromptSheet: View {
                     Section {
                         Toggle("Always do this for this site", isOn: $rememberForSite)
                             .font(.subheadline)
+                            .accessibilityIdentifier("browser.cameraPrompt.remember")
+                            .accessibilityValue(rememberForSite ? "on" : "off")
                     }
                 }
                 actionSection
@@ -29,6 +31,8 @@ struct CameraRequestPromptSheet: View {
             .navigationTitle("Camera Request")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .accessibilityIdentifier("browser.cameraPrompt.sheet")
+        .accessibilityValue("id=\(request.id);kind=\(request.kind.rawValue);facing=\(request.facing);origin=\(request.origin);queued=\(queuedStepCount)")
         .presentationDetents([.medium, .large])
         .presentationContentInteraction(.scrolls)
         .interactiveDismissDisabled()
@@ -111,6 +115,8 @@ struct CameraRequestPromptSheet: View {
                     }
                 }
                 .disabled(action == .serveNext && queuedStepCount == 0)
+                .accessibilityIdentifier("browser.cameraPrompt.action.\(action.rawValue)")
+                .accessibilityValue("remember=\(rememberForSite)")
             }
         } header: {
             Text("Serve")
@@ -144,6 +150,8 @@ struct CameraRequestPromptSheet: View {
                             Spacer(minLength: 0)
                         }
                     }
+                    .accessibilityIdentifier("browser.cameraPrompt.step.\(step.id.uuidString)")
+                    .accessibilityValue("index=\(index);kind=\(step.kind.rawValue)")
                 }
             } header: {
                 Text("Or pick a specific item")

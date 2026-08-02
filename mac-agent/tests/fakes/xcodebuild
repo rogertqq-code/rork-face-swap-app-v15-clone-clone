@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+import signal
+import sys
+import time
+from pathlib import Path
+
+arguments = sys.argv[1:]
+mode = os.environ.get("FAKE_XCODEBUILD_MODE", "success")
+state_path = Path(os.environ.get("FAKE_XCODEBUILD_STATE", "/tmp/faceswap-fake-xcodebuild-state"))
+record_path = os.environ.get("FAKE_XCODEBUILD_RECORD")
+environment_record_path = os.environ.get("FAKE_XCODEBUILD_ENV_RECORD")
+
+if record_path:
+    Path(record_path).write_text(json.dumps(arguments, indent=2) + "\n", encoding="utf-8")
+if environment_record_path:
+    trace_environment = {
+        name: os.environ.get(name)
+        for name in (
+            "FACESWAP_QA_JOB_ID",
+            "FACESWAP_QA_RUN_ID",
+            "FACESWAP_QA_SESSION_TRACE_ID",
+            "FACESWAP_QA_OPERATION_TRACE_ID",
+            "FACESWAP_QA_SPAN_ID",
+            "FACESWAP_QA_TRACEPARENT",
+            "FACESWAP_QA_ATTEMPT",
+        )
+    }
+    Path(environment_record_path).write_text(
+        json.dumps(trace_environment, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+if mode == "sleep":
+    print("Fake xcodebuild waiting for cancellation", flush=True)
+    while True:
+        time.sleep(0.2)
+
+if mode == "transient_once" and not state_path.exists():
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text("failed-once\n", encoding="utf-8")
+    print("error: device disconnected during test execution", flush=True)
+    raise SystemExit(70)
+
+if mode == "provisioning_failure":
+    print("error: provisioning profile does not include signing certificate", flush=True)
+    raise SystemExit(65)
+
+try:
+    result_index = arguments.index("-resultBundlePath") + 1
+    result_path = Path(arguments[result_index])
+except (ValueError, IndexError):
+    print("error: result bundle path missing", flush=True)
+    raise SystemExit(2)
+
+result_path.mkdir(parents=True, exist_ok=True)
+(result_path / "Info.plist").write_text("fake-xcresult\n", encoding="utf-8")
+(result_path / "summary.json").write_text(
+    json.dumps({"status": "succeeded", "arguments": arguments}, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+print("Test Suite 'FaceSwapLiveAppV17-QA' passed", flush=True)
+raise SystemExit(0)

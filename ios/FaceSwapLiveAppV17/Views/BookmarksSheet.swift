@@ -42,6 +42,8 @@ struct BookmarksSheet: View {
                                     }
                                 }
                             }
+                            .accessibilityIdentifier("browser.bookmarks.item.\(bookmark.id.uuidString)")
+                            .accessibilityValue(bookmark.urlString)
                         }
                         .onDelete { offsets in
                             for index in offsets {
@@ -56,8 +58,11 @@ struct BookmarksSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
+                        .accessibilityIdentifier("browser.bookmarks.close")
                 }
             }
         }
+        .accessibilityIdentifier("browser.bookmarks.sheet")
+        .accessibilityValue("count=\(viewModel.bookmarks.count)")
     }
 }

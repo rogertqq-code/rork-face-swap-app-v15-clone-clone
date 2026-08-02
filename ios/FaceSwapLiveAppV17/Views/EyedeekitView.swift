@@ -35,6 +35,8 @@ struct EyedeekitView: View {
             case .browsing: browsingPhase
             }
         }
+        .accessibilityIdentifier("eyedeekit.screen")
+        .accessibilityValue("phase=\(phase == .setup ? "setup" : "browsing");variant=\(model.variant.rawValue);canLaunch=\(model.canLaunch)")
         .onAppear {
             browserVM.activeProfile = profileManager.activeProfile
             browserVM.videoLibrary = videoLibrary
@@ -56,6 +58,7 @@ struct EyedeekitView: View {
             .navigationTitle("eyedeekit")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .accessibilityIdentifier("eyedeekit.setup")
         .photosPicker(isPresented: $isPhotoPickerPresented, selection: $photoItem, matching: .images)
         .photosPicker(isPresented: $isSelfieVideoPickerPresented, selection: $selfieVideoItem, matching: .videos)
         .fullScreenCover(isPresented: $isNativeCameraPresented) {
@@ -74,10 +77,12 @@ struct EyedeekitView: View {
         .onChange(of: selfieVideoItem) { _, item in handleSelfieVideo(item) }
         .alert("Camera Capture", isPresented: $isCameraErrorPresented) {
             Button("OK", role: .cancel) {}
+                .accessibilityIdentifier("eyedeekit.cameraError.dismiss")
             Button("Open Settings") {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
                 UIApplication.shared.open(url)
             }
+            .accessibilityIdentifier("eyedeekit.cameraError.settings")
         } message: {
             Text(cameraErrorMessage)
         }
@@ -109,6 +114,8 @@ struct EyedeekitView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .accessibilityIdentifier("eyedeekit.variant")
+            .accessibilityValue(model.variant.rawValue)
 
             Label(model.variant.flowSummary, systemImage: model.variant.icon)
                 .font(.caption)
@@ -193,11 +200,14 @@ struct EyedeekitView: View {
                     } label: {
                         Label("Remove", systemImage: "trash")
                     }
+                    .accessibilityIdentifier("eyedeekit.slot.remove.\(slot.id)")
                 } label: {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
                         .foregroundStyle(DS.good)
                 }
+                .accessibilityIdentifier("eyedeekit.slot.menu.\(slot.id)")
+                .accessibilityValue("filled")
             } else {
                 Menu {
                     slotSourceButtons(slot)
@@ -206,6 +216,8 @@ struct EyedeekitView: View {
                         .font(.title3)
                         .foregroundStyle(DS.accent)
                 }
+                .accessibilityIdentifier("eyedeekit.slot.menu.\(slot.id)")
+                .accessibilityValue("empty")
             }
         }
         .padding(.vertical, 2)
@@ -251,12 +263,14 @@ struct EyedeekitView: View {
             } label: {
                 Label("Pick Video", systemImage: "photo.on.rectangle")
             }
+            .accessibilityIdentifier("eyedeekit.selfie.pickVideo")
             if !videoLibrary.videos.isEmpty {
                 Button {
                     showMyMediaSelfie = true
                 } label: {
                     Label("From My Media", systemImage: "photo.stack")
                 }
+                .accessibilityIdentifier("eyedeekit.selfie.fromMedia")
             }
         case .document(let doc):
             Button {
@@ -265,6 +279,7 @@ struct EyedeekitView: View {
             } label: {
                 Label("Pick from Library", systemImage: "photo.on.rectangle")
             }
+            .accessibilityIdentifier("eyedeekit.document.library.\(doc.rawValue)")
             if CameraCaptureView.isCameraAvailable {
                 Button {
                     pendingDocument = doc
@@ -272,6 +287,7 @@ struct EyedeekitView: View {
                 } label: {
                     Label("Take Photo", systemImage: "camera.fill")
                 }
+                .accessibilityIdentifier("eyedeekit.document.camera.\(doc.rawValue)")
             }
             if CaptureService.isCameraAvailable {
                 Button {
@@ -280,6 +296,8 @@ struct EyedeekitView: View {
                     Label("Capture Frame", systemImage: "viewfinder")
                 }
                 .disabled(isCapturingFrame)
+                .accessibilityIdentifier("eyedeekit.document.captureFrame.\(doc.rawValue)")
+                .accessibilityValue(isCapturingFrame ? "capturing" : "ready")
             }
         }
     }
@@ -295,6 +313,8 @@ struct EyedeekitView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .accessibilityIdentifier("eyedeekit.timing.realistic")
+            .accessibilityValue(model.realisticDocTiming ? "on" : "off")
         } header: {
             Text("Timing")
         } footer: {
@@ -315,6 +335,8 @@ struct EyedeekitView: View {
                 }
             }
             .disabled(!model.canLaunch)
+            .accessibilityIdentifier("eyedeekit.launch")
+            .accessibilityValue(model.canLaunch ? "ready" : "missing=\(model.missingSlots.count)")
             .listRowBackground(model.canLaunch ? DS.accent : Color(.tertiarySystemFill))
             .foregroundStyle(model.canLaunch ? .white : .secondary)
 
@@ -358,6 +380,7 @@ struct EyedeekitView: View {
                             Spacer()
                         }
                     }
+                    .accessibilityIdentifier("eyedeekit.selfie.media.\(video.id.uuidString)")
                 }
                 if videoLibrary.videos.isEmpty {
                     Text("No saved media yet. Record or import in the My Media tab first.")
@@ -370,6 +393,7 @@ struct EyedeekitView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { showMyMediaSelfie = false }
+                        .accessibilityIdentifier("eyedeekit.selfie.media.close")
                 }
             }
         }
@@ -390,6 +414,8 @@ struct EyedeekitView: View {
             }
         }
         .background(Color(.systemBackground))
+        .accessibilityIdentifier("eyedeekit.browser")
+        .accessibilityValue("url=\(browserVM.currentURL?.absoluteString ?? "");media=\(browserVM.isMediaActive);action=\(lastActionLabel)")
         // Same question card as the main browser: without it, a paused request here
         // would stall until the timer ran out.
         .sheet(item: $browserVM.pendingCameraRequest) { request in
@@ -428,6 +454,7 @@ struct EyedeekitView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .frame(width: 34, height: 34)
             }
+            .accessibilityIdentifier("eyedeekit.browser.exit")
 
             HStack(spacing: 6) {
                 Image(systemName: browserVM.isMediaActive ? "video.fill" : "globe")
@@ -439,12 +466,15 @@ struct EyedeekitView: View {
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                     .onSubmit { openURL() }
+                    .accessibilityIdentifier("eyedeekit.browser.url")
+                    .accessibilityValue(browserVM.currentURL?.absoluteString ?? browserURL)
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 10)
             .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 10))
 
             Button("Go") { openURL() }
+                .accessibilityIdentifier("eyedeekit.browser.go")
                 .font(.system(size: 14, weight: .semibold))
                 .disabled(browserURL.trimmingCharacters(in: .whitespaces).isEmpty)
         }
@@ -469,6 +499,8 @@ struct EyedeekitView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
         .background(Color(.secondarySystemBackground))
+        .accessibilityIdentifier("eyedeekit.browser.status")
+        .accessibilityValue("active=\(browserVM.isMediaActive);lastAction=\(lastActionLabel)")
     }
 
     private var lastActionLabel: String {

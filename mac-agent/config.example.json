@@ -1,0 +1,74 @@
+{
+  "api": {
+    "host": "127.0.0.1",
+    "port": 8765,
+    "token_file": "state/api-token"
+  },
+  "paths": {
+    "ios_root": "../ios",
+    "project": "FaceSwapLiveAppV17.xcodeproj",
+    "database": "state/jobs.sqlite3",
+    "artifacts": "artifacts",
+    "logs": "logs"
+  },
+  "xcode": {
+    "scheme": "FaceSwapLiveAppV17-QA",
+    "test_plan": "FaceSwapLiveAppV17-QA",
+    "developer_dir": "",
+    "default_simulator_name": "iPhone 16 Pro"
+  },
+  "appium": {
+    "executable": "appium",
+    "home": "appium-home",
+    "host": "127.0.0.1",
+    "port": 4723,
+    "base_path": "/",
+    "version": "3.6.0",
+    "xcuitest_driver_version": "12.1.4",
+    "plugin_name": "faceswap-live",
+    "plugin_version": "1.0.0",
+    "remotexpc_version": "5.13.2",
+    "startup_timeout_seconds": 120,
+    "request_timeout_seconds": 240,
+    "shutdown_grace_seconds": 10
+  },
+  "wda": {
+    "updated_bundle_id": "",
+    "xcode_org_id": "",
+    "xcode_signing_id": "Apple Development",
+    "xcode_config_file": "",
+    "derived_data_path": "state/DerivedData-WebDriverAgent",
+    "reuse": true,
+    "use_preinstalled": false,
+    "launch_timeout_ms": 120000,
+    "connection_timeout_ms": 240000,
+    "startup_retries": 2,
+    "local_ports": {
+      "start": 8100,
+      "end": 8199
+    },
+    "mjpeg_ports": {
+      "start": 9100,
+      "end": 9199
+    }
+  },
+  "live": {
+    "bundle_id": "app.rork.face-swap-live-app-v17.qa",
+    "default_lease_seconds": 600,
+    "maximum_lease_seconds": 3600,
+    "watchdog_interval_seconds": 5,
+    "event_history_limit": 5000,
+    "maximum_observation_bytes": 8388608,
+    "maximum_action_text_length": 16384,
+    "sse_heartbeat_seconds": 15,
+    "max_sse_clients": 16
+  },
+  "limits": {
+    "max_request_bytes": 262144,
+    "default_timeout_seconds": 1800,
+    "maximum_timeout_seconds": 7200,
+    "maximum_retries": 2,
+    "retention_hours": 168,
+    "kill_grace_seconds": 10
+  }
+}

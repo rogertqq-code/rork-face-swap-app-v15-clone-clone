@@ -4,7 +4,6 @@ import UIKit
 @globalActor
 actor CaptureSessionActor {
     static let shared = CaptureSessionActor()
-    nonisolated let queue = DispatchQueue(label: "com.app.capturesession")
 }
 
 nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
@@ -51,13 +50,19 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
     private var _currentPosition: AVCaptureDevice.Position = .back
     private var photoCompletion: ((Result<UIImage, CaptureError>) -> Void)?
     private var activePhotoID: Int64?
-    private var photoTimeoutWorkItem: DispatchWorkItem?
+    private var photoTimeoutTask: Task<Void, Never>?
+
+    @CaptureSessionActor private var lifecycleGeneration: UInt64 = 0
+    @CaptureSessionActor private var leaseHeld = false
+    @CaptureSessionActor private var shutdownComplete = true
 
     private var _rotationCoordinator: Any?
 
     @available(iOS 17.0, *)
     var rotationCoordinator: AVCaptureDevice.RotationCoordinator? {
-        _rotationCoordinator as? AVCaptureDevice.RotationCoordinator
+        positionLock.lock()
+        defer { positionLock.unlock() }
+        return _rotationCoordinator as? AVCaptureDevice.RotationCoordinator
     }
 
     var videoRotationAngle: CGFloat {
@@ -90,34 +95,20 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         if let obs = interruptionObserver { nc.removeObserver(obs) }
         if let obs = interruptionEndedObserver { nc.removeObserver(obs) }
         if let obs = runtimeErrorObserver { nc.removeObserver(obs) }
-        // Ensure the capture session is stopped and the hardware lease is
-        // released even if the caller never invoked stop(). deinit is
-        // synchronous so we dispatch to the session queue and fire-and-forget
-        // the async lease release — both are best-effort cleanup.
-        let captureSession = session
-        CaptureSessionActor.shared.queue.async {
-            if captureSession.isRunning { captureSession.stopRunning() }
-        }
-        Task { await MediaResourceCoordinator.shared.releaseLease(for: "CaptureService") }
     }
 
     private func handleInterruption() {
-        cancelActivePhotoCapture()
+        Task { await markInterrupted() }
     }
-    
+
     private func handleInterruptionEnded() {
-        Task {
-            try? await configureAndStartSession()
-        }
+        Task { await restartAfterInterruption() }
     }
-    
+
     private func handleRuntimeError(_ notification: Notification) {
-        guard let error = notification.userInfo?[AVCaptureSessionErrorKey] as? AVError else { return }
-        if error.code == .mediaServicesWereReset {
-            Task {
-                try? await configureAndStartSession()
-            }
-        }
+        guard let error = notification.userInfo?[AVCaptureSessionErrorKey] as? AVError,
+              error.code == .mediaServicesWereReset else { return }
+        Task { await recoverAfterMediaServicesReset() }
     }
 
     var currentPosition: AVCaptureDevice.Position {
@@ -169,13 +160,20 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
             requestVideoAccess { granted in continuation.resume(returning: granted) }
         }
         guard granted else { throw CaptureError.permissionDenied }
-        await MediaResourceCoordinator.shared.acquireLease(for: "CaptureService")
-        try await configureAndStartSession()
+        try await startSessionOwningLease()
     }
 
     func stop() async {
-        await stopSession()
-        await MediaResourceCoordinator.shared.releaseLease(for: "CaptureService")
+        await shutdown()
+    }
+
+    /// Idempotently stops capture, cancels outstanding work, and releases the
+    /// shared media-resource lease. All session mutation is actor-confined.
+    func shutdown() async {
+        let shouldReleaseLease = await stopSessionForShutdown()
+        if shouldReleaseLease {
+            await MediaResourceCoordinator.shared.releaseLease(for: "CaptureService")
+        }
     }
 
     func switchPosition() {
@@ -183,11 +181,9 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         _currentPosition = (_currentPosition == .front) ? .back : .front
         let newPosition = _currentPosition
         positionLock.unlock()
-        
-        Task {
-            try? await configureAndStartSession()
-        }
-        
+
+        Task { await reconfigureForPositionChange() }
+
         DispatchQueue.main.async { [weak self] in
             self?.onPositionChanged?(newPosition)
         }
@@ -224,11 +220,90 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
     }
     
     @CaptureSessionActor
-    private func stopSession() {
+    private func startSessionOwningLease() async throws {
+        if session.isRunning, leaseHeld, !shutdownComplete { return }
+
+        lifecycleGeneration &+= 1
+        let generation = lifecycleGeneration
+        shutdownComplete = false
+
+        if !leaseHeld {
+            await MediaResourceCoordinator.shared.acquireLease(for: "CaptureService")
+            guard generation == lifecycleGeneration, !shutdownComplete else {
+                await MediaResourceCoordinator.shared.releaseLease(for: "CaptureService")
+                throw CaptureError.captureCancelled
+            }
+            leaseHeld = true
+        }
+
+        do {
+            try configureAndStartSession()
+        } catch {
+            shutdownComplete = true
+            if leaseHeld {
+                leaseHeld = false
+                await MediaResourceCoordinator.shared.releaseLease(for: "CaptureService")
+            }
+            throw error
+        }
+    }
+
+    @CaptureSessionActor
+    private func stopSessionForShutdown() -> Bool {
+        guard !shutdownComplete || leaseHeld || session.isRunning else { return false }
+
+        lifecycleGeneration &+= 1
+        shutdownComplete = true
         if session.isRunning {
             session.stopRunning()
         }
         cancelActivePhotoCapture()
+        onFrame = nil
+
+        let shouldRelease = leaseHeld
+        leaseHeld = false
+        return shouldRelease
+    }
+
+    @CaptureSessionActor
+    private func reconfigureForPositionChange() {
+        guard !shutdownComplete, leaseHeld else { return }
+        let generation = lifecycleGeneration
+        do {
+            try configureAndStartSession()
+        } catch {
+            guard generation == lifecycleGeneration else { return }
+            cancelActivePhotoCapture()
+        }
+    }
+
+    @CaptureSessionActor
+    private func markInterrupted() {
+        lifecycleGeneration &+= 1
+        cancelActivePhotoCapture()
+    }
+
+    @CaptureSessionActor
+    private func restartAfterInterruption() {
+        guard !shutdownComplete, leaseHeld else { return }
+        let generation = lifecycleGeneration
+        do {
+            try configureAndStartSession()
+        } catch {
+            guard generation == lifecycleGeneration else { return }
+        }
+    }
+
+    @CaptureSessionActor
+    private func recoverAfterMediaServicesReset() {
+        guard !shutdownComplete, leaseHeld else { return }
+        lifecycleGeneration &+= 1
+        let generation = lifecycleGeneration
+        do {
+            try configureAndStartSession()
+        } catch {
+            guard generation == lifecycleGeneration else { return }
+        }
     }
     
     @CaptureSessionActor
@@ -253,13 +328,14 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         settings.photoQualityPrioritization = .quality
         activePhotoID = settings.uniqueID
         photoCompletion = completion
-        let timeout = DispatchWorkItem { [weak self] in
+        photoTimeoutTask?.cancel()
+        photoTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(12))
+            guard !Task.isCancelled else { return }
             self?.finishPhotoCapture(.failure(.captureTimedOut), id: settings.uniqueID)
         }
-        photoTimeoutWorkItem = timeout
         completionLock.unlock()
 
-        CaptureSessionActor.shared.queue.asyncAfter(deadline: .now() + .seconds(12), execute: timeout)
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
 
@@ -312,7 +388,9 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         session.addInput(input)
         
         if #available(iOS 17.0, *) {
+            positionLock.lock()
             _rotationCoordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
+            positionLock.unlock()
         }
         
         return true
@@ -364,8 +442,8 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         }
         activePhotoID = nil
         photoCompletion = nil
-        photoTimeoutWorkItem?.cancel()
-        photoTimeoutWorkItem = nil
+        photoTimeoutTask?.cancel()
+        photoTimeoutTask = nil
         completionLock.unlock()
 
         DispatchQueue.main.async {

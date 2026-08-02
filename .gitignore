@@ -3,3 +3,14 @@ node_modules
 .expo
 .rork
 *.code-workspace
+build/
+**/node_modules/
+implementation-artifacts/
+merge-artifacts/
+remote-qa-artifacts/
+implementation-artifacts/**/*.zip
+implementation-artifacts/**/*.tar.gz
+remote-qa-artifacts/*.zip
+remote-qa-artifacts/*.tar.gz
+operator-dashboard/dist/
+operator-dashboard/.manus-logs/

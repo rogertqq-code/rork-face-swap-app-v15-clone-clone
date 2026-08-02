@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1785670987938,
+      "tag": "0000_striped_silverclaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1785671894956,
+      "tag": "0001_familiar_random",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1785674691141,
+      "tag": "0002_daffy_hulk",
+      "breakpoints": true
+    }
+  ]
+}

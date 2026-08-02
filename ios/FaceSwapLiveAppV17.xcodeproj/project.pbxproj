@@ -566,13 +566,124 @@
 			};
 			name = Release;
 		};
-/* End XCBuildConfiguration section */
+		A0A0A0A0A0A0A0A0A0A0A001 /* QA-Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"QA_AUTOMATION=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG QA_AUTOMATION $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = "QA-Debug";
+		};
+		A0A0A0A0A0A0A0A0A0A0A002 /* QA-Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 6;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "FaceSwapLive QA";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSCameraUsageDescription = "FaceSwapLive QA needs camera access for automated media testing.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FaceSwapLive QA needs microphone access for automated media testing.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "FaceSwapLive QA needs photo library access for automated media fixtures.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 6.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "app.rork.face-swap-live-app-v17.qa";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG QA_AUTOMATION $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = "QA-Debug";
+		};
+		A0A0A0A0A0A0A0A0A0A0A003 /* QA-Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 6;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
+				MARKETING_VERSION = 6.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "app.rork.face-swap-live-app-v17.qa.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG QA_AUTOMATION $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FaceSwapLiveAppV17.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FaceSwapLiveAppV17";
+			};
+			name = "QA-Debug";
+		};
+		A0A0A0A0A0A0A0A0A0A0A004 /* QA-Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 6;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 6.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "app.rork.face-swap-live-app-v17.qa.uitests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG QA_AUTOMATION $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = FaceSwapLiveAppV17;
+			};
+			name = "QA-Debug";
+		};
+	/* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
 		105FC5752E9EAD3100EA8BCF /* Build configuration list for PBXProject "FaceSwapLiveAppV17" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				105FC59B2E9EAD3200EA8BCF /* Debug */,
+				A0A0A0A0A0A0A0A0A0A0A001 /* QA-Debug */,
 				105FC59C2E9EAD3200EA8BCF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -582,6 +693,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				105FC59E2E9EAD3200EA8BCF /* Debug */,
+				A0A0A0A0A0A0A0A0A0A0A002 /* QA-Debug */,
 				105FC59F2E9EAD3200EA8BCF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -591,6 +703,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				105FC5A12E9EAD3200EA8BCF /* Debug */,
+				A0A0A0A0A0A0A0A0A0A0A003 /* QA-Debug */,
 				105FC5A22E9EAD3200EA8BCF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -600,6 +713,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				105FC5A42E9EAD3200EA8BCF /* Debug */,
+				A0A0A0A0A0A0A0A0A0A0A004 /* QA-Debug */,
 				105FC5A52E9EAD3200EA8BCF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;

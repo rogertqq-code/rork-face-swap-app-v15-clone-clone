@@ -39,6 +39,7 @@ struct ConstraintLogView: View {
                             .foregroundStyle(.red)
                     }
                     .disabled(constraintLog.entries.isEmpty)
+                    .accessibilityIdentifier("diagnostics.constraintLog.clear")
                 }
             }
             .confirmationDialog(
@@ -49,12 +50,16 @@ struct ConstraintLogView: View {
                 Button("Clear Log", role: .destructive) {
                     constraintLog.clearLog()
                 }
+                .accessibilityIdentifier("diagnostics.constraintLog.clear.confirm")
                 Button("Cancel", role: .cancel) {}
+                    .accessibilityIdentifier("diagnostics.constraintLog.clear.cancel")
             } message: {
                 Text("This permanently removes every recorded constraint negotiation. This can't be undone.")
             }
         }
         .preferredColorScheme(.dark)
+        .accessibilityIdentifier("diagnostics.constraintLog.screen")
+        .accessibilityValue("count=\(constraintLog.entries.count)")
     }
 
     private func entryRow(_ entry: ConstraintLogEntry) -> some View {
@@ -111,5 +116,7 @@ struct ConstraintLogView: View {
             }
         }
         .padding(.vertical, 4)
+        .accessibilityIdentifier("diagnostics.constraintLog.entry.\(entry.id.uuidString)")
+        .accessibilityValue("site=\(entry.siteURL);success=\(entry.wasSuccessful);fallback=\(entry.fallbackReason ?? "")")
     }
 }

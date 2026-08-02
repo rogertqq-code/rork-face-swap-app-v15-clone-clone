@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<app id="faceswap" width="390" height="844">
+  <title>FaceSwap Live QA</title>
+  <XCUIElementTypeButton id="qa.banner" label="QA" value="ready" />
+  <XCUIElementTypeTextView id="qa.command.jsonInput" label="QA JSON Command" value="" />
+  <XCUIElementTypeButton id="qa.command.executeJSON" label="Execute JSON" />
+  <XCUIElementTypeStaticText id="qa.command.resultJSON" label="Result" value="{&quot;status&quot;:&quot;success&quot;}" />
+</app>

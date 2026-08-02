@@ -32,6 +32,9 @@ struct NativeCaptureOverlay: View {
             }
         }
         .transition(.opacity)
+        .accessibilityIdentifier("browser.nativeCapture.overlay")
+        .accessibilityLabel("Native capture overlay")
+        .accessibilityValue("active=\(isActive);didFire=\(didFire);flash=\(shutterFlash)")
         .onChange(of: didFire) { _, fired in
             guard fired else { return }
             fireShutter()
@@ -142,6 +145,8 @@ struct NativeCaptureOverlay: View {
                 .scaleEffect(shutterPressed ? 0.86 : 1)
         }
         .animation(.easeOut(duration: 0.12), value: shutterPressed)
+        .accessibilityIdentifier("browser.nativeCapture.shutter")
+        .accessibilityValue(shutterPressed ? "pressed" : "ready")
     }
 
     private func fireShutter() {

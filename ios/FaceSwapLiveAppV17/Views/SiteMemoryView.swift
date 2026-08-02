@@ -25,6 +25,7 @@ struct SiteMemoryView: View {
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
+                                .accessibilityIdentifier("diagnostics.siteMemory.delete.\(record.id.uuidString)")
                             }
                     }
                 } 
@@ -43,6 +44,7 @@ struct SiteMemoryView: View {
                     Image(systemName: "trash").foregroundStyle(.red)
                 }
                 .disabled(siteMemory.records.isEmpty)
+                .accessibilityIdentifier("diagnostics.siteMemory.clear")
             }
         }
         .confirmationDialog(
@@ -53,11 +55,15 @@ struct SiteMemoryView: View {
             Button("Clear Memory", role: .destructive) {
                 siteMemory.clearAll()
             }
+            .accessibilityIdentifier("diagnostics.siteMemory.clear.confirm")
             Button("Cancel", role: .cancel) {}
+                .accessibilityIdentifier("diagnostics.siteMemory.clear.cancel")
         } message: {
             Text("This permanently removes every per-site profile verdict. This can't be undone.")
         }
         .preferredColorScheme(.dark)
+        .accessibilityIdentifier("diagnostics.siteMemory.screen")
+        .accessibilityValue("count=\(siteMemory.records.count)")
     }
 
     private func recordRow(_ record: SiteProfileRecord) -> some View {
@@ -109,6 +115,7 @@ struct SiteMemoryView: View {
                         .foregroundStyle(record.outcome == .worked ? .green : .secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("diagnostics.siteMemory.worked.\(record.id.uuidString)")
                 Button {
                     Haptics.impact(.light)
                     siteMemory.setOutcome(.failed, forRecordID: record.id)
@@ -117,8 +124,11 @@ struct SiteMemoryView: View {
                         .foregroundStyle(record.outcome == .failed ? .red : .secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("diagnostics.siteMemory.failed.\(record.id.uuidString)")
             }
         }
         .padding(.vertical, 3)
+        .accessibilityIdentifier("diagnostics.siteMemory.record.\(record.id.uuidString)")
+        .accessibilityValue("host=\(record.host);profile=\(record.profile.rawValue);outcome=\(record.outcome.rawValue);auto=\(record.autoGuessed)")
     }
 }

@@ -29,9 +29,12 @@ struct ProfileCreationView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                         .disabled(scanner.isScanning)
+                        .accessibilityIdentifier("profile.create.cancel")
                 }
             }
         }
+        .accessibilityIdentifier("profile.create.screen")
+        .accessibilityValue("phase=\(scanner.phase.label);scanning=\(scanner.isScanning);progress=\(scanner.progress);ready=\(createdProfile != nil);verified=\(verificationReport != nil)")
         .sheet(isPresented: $showVerification) {
             if let profile = createdProfile {
                 OfflineVerificationFlowView(profile: profile) { report in
@@ -67,6 +70,8 @@ struct ProfileCreationView: View {
                 VStack(spacing: 8) {
                     ProgressView(value: scanner.progress)
                         .tint(.cyan)
+                        .accessibilityIdentifier("profile.create.progress")
+                        .accessibilityValue(String(scanner.progress))
                         .animation(.spring(duration: 0.4), value: scanner.progress)
 
                     Text("\(Int(scanner.progress * 100))%")
@@ -89,6 +94,7 @@ struct ProfileCreationView: View {
                             }
                         }
                         .font(.subheadline.weight(.medium))
+                        .accessibilityIdentifier("profile.create.openSettings")
                     }
                 }
 
@@ -103,6 +109,8 @@ struct ProfileCreationView: View {
                         .foregroundStyle(.black)
                 }
                 .padding(.horizontal, 24)
+                .accessibilityIdentifier("profile.create.startScan")
+                .accessibilityValue(scanner.isScanning ? "running" : "ready")
             }
 
             Spacer()
@@ -201,6 +209,8 @@ struct ProfileCreationView: View {
 
             TextField("e.g. My iPhone 15 Pro", text: $profileName)
                 .font(.body)
+                .accessibilityIdentifier("profile.create.name")
+                .accessibilityValue(profileName)
                 .padding(12)
                 .background(Color(.secondarySystemGroupedBackground))
                 .clipShape(.rect(cornerRadius: 10))
@@ -534,6 +544,8 @@ struct ProfileCreationView: View {
                         .rotationEffect(.degrees(showMediaTestDetails ? 180 : 0))
                 }
             }
+            .accessibilityIdentifier("profile.create.mediaDetails.toggle")
+            .accessibilityValue(showMediaTestDetails ? "expanded" : "collapsed")
 
             if showMediaTestDetails {
                 realDescriptorsCard(result.realSnapshot)
@@ -767,6 +779,7 @@ struct ProfileCreationView: View {
                 if report != nil {
                     Button("Run Again") { showVerification = true }
                         .font(.caption.weight(.semibold))
+                        .accessibilityIdentifier("profile.create.verification.runAgain")
                         .foregroundStyle(.cyan)
                 }
             }
@@ -785,10 +798,13 @@ struct ProfileCreationView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.cyan)
+                .accessibilityIdentifier("profile.create.verification.run")
             }
         }
         .padding(14)
         .background(tint.opacity(0.10), in: .rect(cornerRadius: 14))
+        .accessibilityIdentifier("profile.create.verification.status")
+        .accessibilityValue(report?.outcome.title ?? "required")
     }
 
     private func verificationColor(for name: String) -> Color {
@@ -826,6 +842,8 @@ struct ProfileCreationView: View {
                 .foregroundStyle(.black)
         }
         .padding(.top, 8)
+        .accessibilityIdentifier("profile.create.save")
+        .accessibilityValue(verificationReport == nil ? "verificationRequired" : "ready")
     }
 
     private func startScan() {

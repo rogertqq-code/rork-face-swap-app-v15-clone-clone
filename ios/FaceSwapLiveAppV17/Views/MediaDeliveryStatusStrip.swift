@@ -36,6 +36,7 @@ struct MediaDeliveryStatusStrip: View {
                         .frame(width: 36, height: 36)
                         .background(tint.opacity(0.12), in: .circle)
                 }
+                .accessibilityIdentifier("browser.media.retry")
                 .accessibilityLabel("Retry media delivery")
 
                 Menu {
@@ -50,6 +51,7 @@ struct MediaDeliveryStatusStrip: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 36, height: 36)
                 }
+                .accessibilityIdentifier("browser.media.recoveryMenu")
                 .accessibilityLabel("Media delivery recovery options")
             }
         }
@@ -62,8 +64,10 @@ struct MediaDeliveryStatusStrip: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Media delivery: \(viewModel.mediaDeliveryStatus.label). \(viewModel.mediaDeliveryDetail)")
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("browser.media.status")
+        .accessibilityLabel("Media delivery")
+        .accessibilityValue("status=\(viewModel.mediaDeliveryStatus.rawValue);active=\(viewModel.isMediaActive);request=\(viewModel.activeMediaRequestID);origin=\(viewModel.activeMediaRequestOrigin);detail=\(viewModel.mediaDeliveryDetail)")
         .animation(.spring(duration: 0.25), value: viewModel.mediaDeliveryStatus)
         .animation(.spring(duration: 0.25), value: viewModel.mediaDeliveryDetail)
     }

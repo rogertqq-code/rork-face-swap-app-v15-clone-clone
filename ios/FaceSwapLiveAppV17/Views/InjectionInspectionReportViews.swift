@@ -77,6 +77,8 @@ struct InjectionInspectionReportDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .preferredColorScheme(.dark)
+        .accessibilityIdentifier("diagnostics.injectionReport.detail")
+        .accessibilityValue("id=\(report.id.uuidString);host=\(report.host);risk=\(report.riskScore);blocked=\(report.blockedCount);warnings=\(report.warningCount)")
     }
 
     private var reportColor: Color {
@@ -146,6 +148,8 @@ struct InjectionInspectionReportDetailView: View {
             }
         }
         .padding(.vertical, 3)
+        .accessibilityIdentifier("diagnostics.injectionReport.finding.\(finding.id.uuidString)")
+        .accessibilityValue("severity=\(finding.severity.rawValue);blocker=\(finding.blocker.rawValue);title=\(finding.title)")
     }
 
     private func icon(for severity: InjectionFindingSeverity) -> String {
@@ -189,6 +193,8 @@ struct InjectionInspectionHistoryView: View {
                                 reportRow(report)
                             }
                             .listRowBackground(Color(.secondarySystemGroupedBackground))
+                            .accessibilityIdentifier("diagnostics.injectionReports.item.\(report.id.uuidString)")
+                            .accessibilityValue("host=\(report.host);risk=\(report.riskScore);blocked=\(report.blockedCount);warnings=\(report.warningCount)")
                         }
                     }
                     .listStyle(.insetGrouped)
@@ -207,6 +213,7 @@ struct InjectionInspectionHistoryView: View {
                             .foregroundStyle(.red)
                     }
                     .disabled(inspector.reports.isEmpty)
+                    .accessibilityIdentifier("diagnostics.injectionReports.clear")
                 }
             }
             .confirmationDialog(
@@ -217,12 +224,16 @@ struct InjectionInspectionHistoryView: View {
                 Button("Clear Reports", role: .destructive) {
                     inspector.clearReports()
                 }
+                .accessibilityIdentifier("diagnostics.injectionReports.clear.confirm")
                 Button("Cancel", role: .cancel) {}
+                    .accessibilityIdentifier("diagnostics.injectionReports.clear.cancel")
             } message: {
                 Text("This permanently removes every saved per-site injection report. This can't be undone.")
             }
         }
         .preferredColorScheme(.dark)
+        .accessibilityIdentifier("diagnostics.injectionReports.screen")
+        .accessibilityValue("count=\(inspector.reports.count)")
     }
 
     private func reportRow(_ report: InjectionInspectionReport) -> some View {

@@ -1,0 +1,13 @@
+# Phase 11 protected physical-device automation ownership
+* @rogertqq-code
+
+/.github/workflows/physical-iphone-qa.yml @rogertqq-code
+/.github/CODEOWNERS @rogertqq-code
+/.github/dependabot.yml @rogertqq-code
+/mac-agent/ @rogertqq-code
+/build/validate_phase11_github.py @rogertqq-code
+/ios/FaceSwapLiveAppV17/QA/ @rogertqq-code
+/ios/FaceSwapLiveAppV17Tests/QA* @rogertqq-code
+/ios/FaceSwapLiveAppV17UITests/ @rogertqq-code
+/docs/PHYSICAL_DEVICE_POLICY.md @rogertqq-code
+/remote-qa-artifacts/phase-11-* @rogertqq-code

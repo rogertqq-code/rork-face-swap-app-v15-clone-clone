@@ -21,6 +21,8 @@ struct CameraRequestSettingsView: View {
         }
         .navigationTitle("Camera Requests")
         .navigationBarTitleDisplayMode(.inline)
+        .accessibilityIdentifier("browser.cameraRequests.screen")
+        .accessibilityValue("enabled=\(store.settings.isEnabled);default=\(store.settings.defaultAction.rawValue);timeout=\(store.settings.timeoutSeconds);rules=\(store.siteRules.count)")
     }
 
     private var masterSection: some View {
@@ -37,6 +39,8 @@ struct CameraRequestSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .accessibilityIdentifier("browser.cameraRequests.enabled")
+            .accessibilityValue(store.settings.isEnabled ? "on" : "off")
         } footer: {
             Text("Off by default. While off, camera requests are answered automatically from your queue exactly as before.")
         }
@@ -45,8 +49,11 @@ struct CameraRequestSettingsView: View {
     private var kindsSection: some View {
         Section {
             Toggle("Live camera feeds", isOn: binding(\.askForLiveCamera))
+                .accessibilityIdentifier("browser.cameraRequests.live")
             Toggle("Native camera captures", isOn: binding(\.askForNativeCamera))
+                .accessibilityIdentifier("browser.cameraRequests.native")
             Toggle("Library / file picks", isOn: binding(\.askForFilePick))
+                .accessibilityIdentifier("browser.cameraRequests.filePick")
         } header: {
             Text("Ask about")
         } footer: {
@@ -64,6 +71,8 @@ struct CameraRequestSettingsView: View {
                     Text(action.label).tag(action)
                 }
             }
+            .accessibilityIdentifier("browser.cameraRequests.defaultAction")
+            .accessibilityValue(store.settings.defaultAction.rawValue)
 
             Stepper(
                 value: Binding(
@@ -82,6 +91,8 @@ struct CameraRequestSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .accessibilityIdentifier("browser.cameraRequests.timeout")
+            .accessibilityValue(String(store.settings.timeoutSeconds))
         } header: {
             Text("If I don't answer in time")
         } footer: {
@@ -91,7 +102,9 @@ struct CameraRequestSettingsView: View {
 
     private var memorySection: some View {
         Section {
-            Toggle("Offer \u{201C}always do this for this site\u{201D}", isOn: binding(\.rememberPerSite))
+            Toggle("Offer “always do this for this site”", isOn: binding(\.rememberPerSite))
+                .accessibilityIdentifier("browser.cameraRequests.rememberPerSite")
+                .accessibilityValue(store.settings.rememberPerSite ? "on" : "off")
         } header: {
             Text("Per-site memory")
         } footer: {
@@ -109,6 +122,8 @@ struct CameraRequestSettingsView: View {
                     Text(policy.label).tag(policy)
                 }
             }
+            .accessibilityIdentifier("browser.cameraRequests.permissionReset")
+            .accessibilityValue(store.settings.permissionReset.rawValue)
             Text(store.settings.permissionReset.detail)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -149,7 +164,10 @@ struct CameraRequestSettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("browser.cameraRequests.rule.delete.\(host)")
                     }
+                    .accessibilityIdentifier("browser.cameraRequests.rule.\(host)")
+                    .accessibilityValue(action.rawValue)
                 }
             }
         } header: {

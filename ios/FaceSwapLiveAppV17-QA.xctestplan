@@ -1,0 +1,91 @@
+{
+  "configurations" : [
+    {
+      "id" : "4F2C7B4A-1F77-4C2D-8E61-63B32A97A9D2",
+      "name" : "Simulator",
+      "options" : {
+        "language" : "en",
+        "region" : "US",
+        "commandLineArgumentEntries" : [
+          {
+            "argument" : "-qaAutomation",
+            "enabled" : true
+          },
+          {
+            "argument" : "-qaResetState",
+            "enabled" : true
+          }
+        ],
+        "environmentVariableEntries" : [
+          {
+            "key" : "QA_AUTOMATION",
+            "value" : "1",
+            "enabled" : true
+          },
+          {
+            "key" : "QA_RUN_MODE",
+            "value" : "simulator",
+            "enabled" : true
+          }
+        ]
+      }
+    },
+    {
+      "id" : "268A3FC9-F6F5-4999-AAB7-9A885B2BD990",
+      "name" : "Cable Device",
+      "options" : {
+        "language" : "en",
+        "region" : "US",
+        "commandLineArgumentEntries" : [
+          {
+            "argument" : "-qaAutomation",
+            "enabled" : true
+          },
+          {
+            "argument" : "-qaResetState",
+            "enabled" : true
+          }
+        ],
+        "environmentVariableEntries" : [
+          {
+            "key" : "QA_AUTOMATION",
+            "value" : "1",
+            "enabled" : true
+          },
+          {
+            "key" : "QA_RUN_MODE",
+            "value" : "cable",
+            "enabled" : true
+          }
+        ]
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:FaceSwapLiveAppV17.xcodeproj",
+      "identifier" : "105FC5792E9EAD3100EA8BCF",
+      "name" : "FaceSwapLiveAppV17"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:FaceSwapLiveAppV17.xcodeproj",
+        "identifier" : "105FC5882E9EAD3200EA8BCF",
+        "name" : "FaceSwapLiveAppV17Tests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:FaceSwapLiveAppV17.xcodeproj",
+        "identifier" : "105FC5922E9EAD3200EA8BCF",
+        "name" : "FaceSwapLiveAppV17UITests"
+      }
+    }
+  ],
+  "version" : 1
+}

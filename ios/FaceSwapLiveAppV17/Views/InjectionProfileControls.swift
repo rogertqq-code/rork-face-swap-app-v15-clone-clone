@@ -54,6 +54,8 @@ struct InjectionProfilePicker: View {
                         .background(activeMethod == method ? Color(themeName: method.tintName) : Color(themeName: method.tintName).opacity(0.13), in: .rect(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("browser.injection.method.\(method.rawValue)")
+                    .accessibilityValue(activeMethod == method ? "selected" : "available")
                 }
             }
 
@@ -110,6 +112,8 @@ struct InjectionProfilePicker: View {
         .animation(.spring(duration: 0.3), value: viewModel.engineArmChecked)
         .sensoryFeedback(.selection, trigger: activeMethod)
         .sensoryFeedback(.selection, trigger: viewModel.activeNetworkBackend)
+        .accessibilityIdentifier("browser.injection.picker")
+        .accessibilityValue("method=\(activeMethod.rawValue);blockScripts=\(viewModel.activeNetworkBackend.blockDetectionScripts);rewriteProxy=\(viewModel.activeNetworkBackend.useRewriteProxy);engine=\(viewModel.engineArmed);feed=\(viewModel.liveFeedRaw)")
     }
 
     private var networkBackendControls: some View {
@@ -191,6 +195,8 @@ struct InjectionProfilePicker: View {
             Toggle(title, isOn: isOn)
                 .labelsHidden()
                 .tint(tint)
+                .accessibilityIdentifier("browser.injection.network.\(title.replacingOccurrences(of: " ", with: "_"))")
+                .accessibilityValue(isOn.wrappedValue ? "on" : "off")
         }
     }
 
@@ -215,6 +221,8 @@ struct InjectionProfilePicker: View {
                 }
                 .padding(10)
                 .background(.green.opacity(0.1), in: .rect(cornerRadius: 10))
+                .accessibilityIdentifier("browser.injection.engineStatus")
+                .accessibilityValue("armed")
             } else {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "exclamationmark.shield.fill")
@@ -234,6 +242,8 @@ struct InjectionProfilePicker: View {
                 }
                 .padding(10)
                 .background(.red.opacity(0.12), in: .rect(cornerRadius: 10))
+                .accessibilityIdentifier("browser.injection.engineStatus")
+                .accessibilityValue("notArmed:\(viewModel.engineArmError)")
             }
         }
     }
@@ -282,6 +292,8 @@ struct InjectionProfilePicker: View {
             }
             .padding(10)
             .background(tint.opacity(0.1), in: .rect(cornerRadius: 10))
+            .accessibilityIdentifier("browser.injection.liveFeedStatus")
+            .accessibilityValue("raw=\(viewModel.liveFeedRaw);lane=\(viewModel.liveFeedLaneRaw);downgraded=\(viewModel.liveFeedDowngraded);reason=\(viewModel.liveFeedReasonRaw)")
         }
     }
 }
@@ -344,6 +356,8 @@ struct CameraRequestInsightCard: View {
                 }
             }
             .padding(.vertical, 2)
+            .accessibilityIdentifier("browser.cameraInsight")
+            .accessibilityValue("id=\(insight.id.uuidString);host=\(insight.host);target=\(insight.target.rawValue);requested=\(insight.requestedLabel);predicted=\(insight.predictedLabel);audio=\(insight.audioRequested)")
         } else {
             VStack(spacing: 8) {
                 Image(systemName: "video.badge.waveform")
@@ -494,6 +508,8 @@ struct DetectionScanCard: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(Color(themeName: detected.recommendedProfile.tintName))
+            .accessibilityIdentifier("browser.detection.recommendation.apply")
+            .accessibilityValue(detected.recommendedProfile.rawValue)
 
             Divider()
             SiteOutcomeControl(viewModel: viewModel)
@@ -559,6 +575,8 @@ struct DetectionScanCard: View {
         .buttonStyle(.bordered)
         .controlSize(.small)
         .disabled(viewModel.currentURL == nil || viewModel.isInspectingCurrentSite)
+        .accessibilityIdentifier("browser.detection.scan")
+        .accessibilityValue(viewModel.isInspectingCurrentSite ? "running" : "ready")
     }
 }
 
@@ -600,5 +618,7 @@ struct SiteOutcomeControl: View {
         }
         .buttonStyle(.plain)
         .disabled(viewModel.currentURL == nil)
+        .accessibilityIdentifier("browser.siteOutcome.\(value.rawValue)")
+        .accessibilityValue(outcome.rawValue)
     }
 }

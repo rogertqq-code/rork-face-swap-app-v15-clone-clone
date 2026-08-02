@@ -20,6 +20,8 @@ struct FingerprintConsistencyView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .preferredColorScheme(.dark)
+        .accessibilityIdentifier("diagnostics.fingerprint.screen")
+        .accessibilityValue("testing=\(service.isTesting);iterations=\(iterations);results=\(service.consistencyResults.count)")
     }
 
     // MARK: - Overall Status
@@ -43,6 +45,8 @@ struct FingerprintConsistencyView: View {
             }
             .padding(14)
             .background((passed ? Color.green : Color.red).opacity(0.1), in: .rect(cornerRadius: 12))
+            .accessibilityIdentifier("diagnostics.fingerprint.status")
+            .accessibilityValue(passed ? "passed" : "failed")
         }
     }
 
@@ -74,6 +78,8 @@ struct FingerprintConsistencyView: View {
                         .background(.cyan.opacity(0.15), in: .rect(cornerRadius: 6))
                 }
             }
+            .accessibilityIdentifier("diagnostics.fingerprint.iterations")
+            .accessibilityValue(String(iterations))
 
             Button {
                 Task {
@@ -98,6 +104,8 @@ struct FingerprintConsistencyView: View {
                 .foregroundStyle(.black)
             }
             .disabled(service.isTesting)
+            .accessibilityIdentifier("diagnostics.fingerprint.run")
+            .accessibilityValue(service.isTesting ? "running" : "ready")
         }
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground))
@@ -163,5 +171,7 @@ struct FingerprintConsistencyView: View {
             Spacer()
         }
         .padding(.vertical, 4)
+        .accessibilityIdentifier("diagnostics.fingerprint.result.\(result.id.uuidString)")
+        .accessibilityValue("field=\(result.field);consistent=\(result.isConsistent);values=\(result.values.joined(separator: ","))")
     }
 }

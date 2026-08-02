@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+arguments = sys.argv[1:]
+record_path = os.environ.get("FAKE_XCRUN_RECORD")
+if record_path:
+    with Path(record_path).open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(arguments) + "\n")
+
+if arguments[:3] == ["devicectl", "list", "devices"]:
+    try:
+        output = Path(arguments[arguments.index("--json-output") + 1])
+    except (ValueError, IndexError):
+        raise SystemExit(2)
+    output.write_text(
+        json.dumps(
+            {
+                "result": {
+                    "devices": [
+                        {
+                            "identifier": "CORE-DEVICE-1",
+                            "hardwareProperties": {
+                                "udid": "00008110-FAKECABLE",
+                                "deviceType": "iPhone",
+                                "marketingName": "iPhone 15 Pro",
+                                "platform": "iOS",
+                                "reality": "physical",
+                            },
+                            "deviceProperties": {
+                                "name": "QA Cable iPhone",
+                                "osVersionNumber": "18.1",
+                                "developerModeStatus": "enabled",
+                            },
+                            "connectionProperties": {
+                                "pairingState": "paired",
+                                "transportType": "wired",
+                            },
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    raise SystemExit(0)
+
+if arguments[:3] == ["xctrace", "list", "devices"]:
+    print("== Devices ==")
+    print("QA Cable iPhone (18.1) (00008110-FAKECABLE)")
+    print("== Simulators ==")
+    raise SystemExit(0)
+
+if arguments[:5] == ["simctl", "list", "devices", "available", "--json"]:
+    print(
+        json.dumps(
+            {
+                "devices": {
+                    "com.apple.CoreSimulator.SimRuntime.iOS-18-0": [
+                        {
+                            "name": "iPhone 16 Pro",
+                            "udid": "SIMULATOR-FAKE-18",
+                            "state": "Booted",
+                            "isAvailable": True,
+                        }
+                    ]
+                }
+            }
+        )
+    )
+    raise SystemExit(0)
+
+if arguments[:2] in (["simctl", "boot"], ["simctl", "bootstatus"]):
+    raise SystemExit(0)
+
+print(f"unsupported fake xcrun arguments: {arguments}", file=sys.stderr)
+raise SystemExit(2)

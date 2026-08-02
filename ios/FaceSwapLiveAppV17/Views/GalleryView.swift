@@ -35,6 +35,7 @@ struct GalleryView: View {
                                         }
                                         .clipShape(.rect)
                                 }
+                                .accessibilityIdentifier("preview.gallery.item.\(item.id.uuidString)")
                             }
                         }
                     }
@@ -45,12 +46,15 @@ struct GalleryView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
+                        .accessibilityIdentifier("preview.gallery.close")
                 }
             }
             .sheet(item: $selectedItem) { item in
                 ImageDetailView(image: item.image)
             }
         }
+        .accessibilityIdentifier("preview.gallery.screen")
+        .accessibilityValue("count=\(images.count)")
     }
 }
 
@@ -74,15 +78,18 @@ private struct ImageDetailView: View {
                             .font(.title2)
                             .foregroundStyle(.white.opacity(0.7))
                     }
+                    .accessibilityIdentifier("preview.gallery.detail.close")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     ShareLink(item: Image(uiImage: image), preview: SharePreview("Capture", image: Image(uiImage: image))) {
                         Image(systemName: "square.and.arrow.up")
                             .foregroundStyle(.white)
                     }
+                    .accessibilityIdentifier("preview.gallery.detail.share")
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
         }
+        .accessibilityIdentifier("preview.gallery.detail")
     }
 }

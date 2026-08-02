@@ -1,0 +1,207 @@
+name: Protected Physical iPhone QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Operation to perform
+        required: true
+        default: preflight
+        type: choice
+        options:
+          - preflight
+          - execute
+      scenario:
+        description: Allowlisted XCUITest scenario
+        required: true
+        default: canary
+        type: choice
+        options:
+          - canary
+          - launch
+          - tabs
+          - browser
+          - media
+          - diagnostics
+          - recovery
+          - hardware
+          - all
+      device_udid:
+        description: Exact activated cable-device UDID
+        required: true
+        type: string
+      timeout_minutes:
+        description: Agent job timeout
+        required: true
+        default: "45"
+        type: choice
+        options:
+          - "15"
+          - "30"
+          - "45"
+          - "60"
+          - "90"
+          - "120"
+      retry_count:
+        description: Bounded transient retry count
+        required: true
+        default: "0"
+        type: choice
+        options:
+          - "0"
+          - "1"
+          - "2"
+      retention_days:
+        description: Audited evidence retention
+        required: true
+        default: "14"
+        type: choice
+        options:
+          - "1"
+          - "3"
+          - "7"
+          - "14"
+          - "30"
+      trace_label:
+        description: Optional safe trace label
+        required: false
+        type: string
+      confirm_physical_device:
+        description: Confirm authorized physical-device execution
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: faceswap-physical-iphone-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  physical-iphone-qa:
+    name: Protected physical iPhone QA
+    environment: physical-iphone-qa
+    runs-on:
+      - self-hosted
+      - macOS
+      - faceswap-cable-qa
+    timeout-minutes: 150
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      GITHUB_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+      PHYSICAL_QA_ACTIVATION: ${{ vars.PHYSICAL_QA_ACTIVATION }}
+      PHYSICAL_QA_REPOSITORY: ${{ vars.PHYSICAL_QA_REPOSITORY }}
+      PHYSICAL_QA_RUNNER_USER: ${{ vars.PHYSICAL_QA_RUNNER_USER }}
+      FACESWAP_QA_CONFIG: ${{ vars.FACESWAP_QA_CONFIG }}
+      FACESWAP_QA_ACTIVATION_FILE: ${{ vars.FACESWAP_QA_ACTIVATION_FILE }}
+      INPUT_OPERATION: ${{ inputs.operation }}
+      INPUT_SCENARIO: ${{ inputs.scenario }}
+      INPUT_DEVICE_UDID: ${{ inputs.device_udid }}
+      INPUT_TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+      INPUT_RETRY_COUNT: ${{ inputs.retry_count }}
+      INPUT_RETENTION_DAYS: ${{ inputs.retention_days }}
+      INPUT_TRACE_LABEL: ${{ inputs.trace_label }}
+      INPUT_CONFIRM_PHYSICAL_DEVICE: ${{ inputs.confirm_physical_device }}
+      PHYSICAL_QA_RUN_DIR: ${{ runner.temp }}/faceswap-physical-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Fail-closed activation gate
+        shell: bash
+        env:
+          EXPECTED_EVENT: ${{ github.event_name }}
+          EXPECTED_REF: ${{ github.ref }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          EXPECTED_PRIVATE: ${{ github.event.repository.private }}
+          EXPECTED_CONFIRMATION: ${{ inputs.confirm_physical_device }}
+          EXPECTED_OPERATION: ${{ inputs.operation }}
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          [[ "$EXPECTED_EVENT" == "workflow_dispatch" ]]
+          [[ "$EXPECTED_REF" == "refs/heads/main" ]]
+          [[ "$EXPECTED_PRIVATE" == "true" ]]
+          [[ "$PHYSICAL_QA_ACTIVATION" == "phase11-v1" ]]
+          [[ "$PHYSICAL_QA_REPOSITORY" == "$EXPECTED_REPOSITORY" ]]
+          [[ -n "$PHYSICAL_QA_RUNNER_USER" ]]
+          [[ "$RUNNER_OS" == "macOS" ]]
+          [[ "$GITHUB_WORKFLOW_REF" == *"@refs/heads/main" ]]
+          if [[ "$EXPECTED_OPERATION" == "execute" ]]; then
+            [[ "$EXPECTED_CONFIRMATION" == "true" ]]
+          fi
+
+      - name: Checkout authorized commit
+        id: checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          clean: true
+          submodules: false
+
+      - name: Run protected bridge
+        id: bridge
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          export PYTHONPATH="$GITHUB_WORKSPACE/mac-agent"
+          python3 -m faceswap_qa_agent.github_runner run
+
+      - name: Prove terminal cleanup
+        id: cleanup
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          export PYTHONPATH="$GITHUB_WORKSPACE/mac-agent"
+          python3 -m faceswap_qa_agent.github_runner cleanup
+
+      - name: Audit upload evidence
+        id: audit
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          export PYTHONPATH="$GITHUB_WORKSPACE/mac-agent"
+          python3 -m faceswap_qa_agent.github_evidence audit \
+            --run-dir "$PHYSICAL_QA_RUN_DIR" \
+            --operation "$INPUT_OPERATION"
+          if [[ -f "$PHYSICAL_QA_RUN_DIR/github-summary.md" ]]; then
+            cat "$PHYSICAL_QA_RUN_DIR/github-summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload audited evidence
+        id: upload
+        if: ${{ always() && steps.audit.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: physical-iphone-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.PHYSICAL_QA_RUN_DIR }}
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: ${{ inputs.retention_days }}
+          compression-level: 0
+
+      - name: Enforce final outcome
+        if: ${{ always() }}
+        shell: bash
+        env:
+          BRIDGE_OUTCOME: ${{ steps.bridge.outcome }}
+          CLEANUP_OUTCOME: ${{ steps.cleanup.outcome }}
+          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+        run: |
+          set -Eeuo pipefail
+          printf 'bridge=%s cleanup=%s audit=%s upload=%s\n' \
+            "$BRIDGE_OUTCOME" "$CLEANUP_OUTCOME" "$AUDIT_OUTCOME" "$UPLOAD_OUTCOME"
+          [[ "$CLEANUP_OUTCOME" == "success" ]]
+          [[ "$AUDIT_OUTCOME" == "success" ]]
+          [[ "$UPLOAD_OUTCOME" == "success" ]]
+          [[ "$BRIDGE_OUTCOME" == "success" ]]
