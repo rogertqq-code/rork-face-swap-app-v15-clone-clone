@@ -231,7 +231,7 @@ struct OverlayControlSheet: View {
         captureService.capturePhoto { result in
             Task { @MainActor in
                 isCapturingFrame = false
-                captureService.stop()
+                await captureService.stop()
                 switch result {
                 case .success(let image):
                     viewModel.setStepImage(image, for: stepID)

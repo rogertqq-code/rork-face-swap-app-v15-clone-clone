@@ -247,12 +247,9 @@ struct BrowserWebContainer: UIViewRepresentable {
             if let destination = navigationAction.request.url {
                 if viewModel.shouldBlockCameraCustomScheme(destination) {
                     viewModel.noteCameraCustomSchemeBlocked(destination)
-                    webView.callAsyncJavaScript(
-                        "return window.__fslMediaAdapters && window.__fslMediaAdapters.request('both', label);",
-                        arguments: ["label": "custom-scheme-\(destination.scheme ?? "unknown")"],
-                        in: navigationAction.sourceFrame,
-                        contentWorld: .page
-                    ) { _ in }
+                    let body = "return window.__fslMediaAdapters && window.__fslMediaAdapters.request('both', label);"
+                    let args: [String: Any] = ["label": "custom-scheme-\(destination.scheme ?? "unknown")"]
+                    Task { try? await webView.callAsyncJavaScript(body, arguments: args, in: navigationAction.sourceFrame, in: .page) }
                     decisionHandler(.cancel)
                     return
                 }
@@ -512,12 +509,8 @@ struct BrowserWebContainer: UIViewRepresentable {
                 if let sdpMid = candidate.sdpMid { candidatePayload["sdpMid"] = sdpMid }
                 payload["candidate"] = candidatePayload
             }
-            webView.callAsyncJavaScript(
-                "return window.__fslNativeRTCStep1 && window.__fslNativeRTCStep1.receiveSignal(event);",
-                arguments: ["event": payload],
-                in: frame,
-                contentWorld: .page
-            ) { _ in }
+            let signalBody = "return window.__fslNativeRTCStep1 && window.__fslNativeRTCStep1.receiveSignal(event);"
+            Task { try? await webView.callAsyncJavaScript(signalBody, arguments: ["event": payload], in: frame, in: .page) }
         }
 
         struct CameraMessageBody: Codable {

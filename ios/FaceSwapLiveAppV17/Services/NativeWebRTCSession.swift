@@ -109,6 +109,12 @@ nonisolated struct NativeWebRTCSignalEvent: Codable, Sendable, Hashable, Identif
     }
 }
 
+/// `@unchecked Sendable` wrapper for `RTCSessionDescription`, which is not
+/// `Sendable` by default but is safe to transfer once obtained from the SDK.
+nonisolated private struct SendableSDP: @unchecked Sendable {
+    let description: RTCSessionDescription
+}
+
 nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate, @unchecked Sendable {
     typealias EventSink = @Sendable (NativeWebRTCSignalEvent) -> Void
 
@@ -207,17 +213,18 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
             ],
             optionalConstraints: nil
         )
-        let offer = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RTCSessionDescription, any Error>) in
+        let boxed = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<SendableSDP, any Error>) in
             peerConnection.offer(for: constraints) { description, error in
                 if let error {
                     continuation.resume(throwing: MediaDeliveryContractError.signalingFailed(error.localizedDescription))
                 } else if let description {
-                    continuation.resume(returning: description)
+                    continuation.resume(returning: SendableSDP(description: description))
                 } else {
                     continuation.resume(throwing: MediaDeliveryContractError.signalingFailed("The native peer returned no SDP offer."))
                 }
             }
         }
+        let offer = boxed.description
         try await setLocalDescription(offer)
         return NativeWebRTCSessionDescription(offer)
     }

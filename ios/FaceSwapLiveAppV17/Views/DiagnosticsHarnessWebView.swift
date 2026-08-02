@@ -259,12 +259,8 @@ struct DiagnosticsHarnessWebView: UIViewRepresentable {
                 if let sdpMid = candidate.sdpMid { value["sdpMid"] = sdpMid }
                 payload["candidate"] = value
             }
-            webView.callAsyncJavaScript(
-                "return window.__fslNativeRTCStep1 && window.__fslNativeRTCStep1.receiveSignal(event);",
-                arguments: ["event": payload],
-                in: frame,
-                contentWorld: .page
-            ) { _ in }
+            let signalBody = "return window.__fslNativeRTCStep1 && window.__fslNativeRTCStep1.receiveSignal(event);"
+            Task { try? await webView.callAsyncJavaScript(signalBody, arguments: ["event": payload], in: frame, in: .page) }
         }
 
         private func boolValue(_ value: Any?) -> Bool? {

@@ -527,6 +527,7 @@ final class SetupService {
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".mov")
 
+        let cancelBox = CancellationBox<TestClipRecorder>()
         let result: TestClipResult? = await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<TestClipResult?, Never>) in
                 let guard_ = ResumeGuard(continuation: continuation)
@@ -535,17 +536,15 @@ final class SetupService {
                     guard_.resume(result)
                 }
                 self.activeRecorder = recorder
+                cancelBox.set(recorder)
                 recorder.start()
 
                 DispatchQueue.global().asyncAfter(deadline: .now() + 5.0) {
                     guard_.resume(nil)
                 }
             }
-        } onCancel: { [weak self] in
-            guard let self else { return }
-            Task { @MainActor in
-                self.activeRecorder?.stop()
-            }
+        } onCancel: {
+            cancelBox.getAndClear()?.stop()
         }
         // Release the recorder once the clip has finished or timed out. Runs back
         // on the main actor after the continuation resumes (the previous
@@ -560,6 +559,7 @@ final class SetupService {
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".m4a")
 
+        let cancelBox = CancellationBox<TestAudioRecorder>()
         let result: TestAudioResult? = await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<TestAudioResult?, Never>) in
                 let guard_ = ResumeGuard(continuation: continuation)
@@ -568,17 +568,15 @@ final class SetupService {
                     guard_.resume(result)
                 }
                 self.activeAudioRecorder = recorder
+                cancelBox.set(recorder)
                 recorder.start()
 
                 DispatchQueue.global().asyncAfter(deadline: .now() + 3.0) {
                     guard_.resume(nil)
                 }
             }
-        } onCancel: { [weak self] in
-            guard let self else { return }
-            Task { @MainActor in
-                self.activeAudioRecorder?.stop()
-            }
+        } onCancel: {
+            cancelBox.getAndClear()?.stop()
         }
         // Release the recorder once recording has finished or timed out (the
         // previous assignment here sat after `return await` and was unreachable).
@@ -881,6 +879,21 @@ final class SetupService {
         case .builtInLiDARDepthCamera: return "LiDAR"
         default: return "Unknown"
         }
+    }
+}
+
+/// Thread-safe optional reference box so a `@Sendable` cancellation handler
+/// can stop a recorder without capturing a MainActor-isolated `self`.
+nonisolated private final class CancellationBox<T: AnyObject>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var ref: T?
+
+    func set(_ value: T?) {
+        lock.lock(); ref = value; lock.unlock()
+    }
+
+    func getAndClear() -> T? {
+        lock.lock(); let v = ref; ref = nil; lock.unlock(); return v
     }
 }
 

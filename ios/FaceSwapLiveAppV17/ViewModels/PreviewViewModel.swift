@@ -98,11 +98,11 @@ final class PreviewViewModel {
         isFrontPosition = (captureService.currentPosition == .front)
         activeCameraName = captureService.currentCameraName
 
-        captureService.start()
+        Task { try? await captureService.start() }
     }
 
     func stopCapture() {
-        captureService.stop()
+        Task { await captureService.stop() }
     }
 
     func selectSourceImage(_ image: UIImage) {

@@ -1,5 +1,11 @@
 import WebKit
 
+/// `@unchecked Sendable` wrapper for `Any?` results from `evaluateJavaScript`,
+/// which are not `Sendable` by default but are safe to transfer once obtained.
+nonisolated private struct SendableJSResult: @unchecked Sendable {
+    let value: Any?
+}
+
 /// Serializes all evaluateJavaScript calls to prevent race conditions
 /// from concurrent script evaluations on the same WKWebView.
 @MainActor
@@ -22,12 +28,13 @@ final class WebRuntimeCoordinator {
     }
     
     func evaluate(_ script: String) async throws -> Any? {
-        try await withCheckedThrowingContinuation { continuation in
+        let boxed = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<SendableJSResult, any Error>) in
             evaluate(script) { result, error in
                 if let error { continuation.resume(throwing: error) }
-                else { continuation.resume(returning: result) }
+                else { continuation.resume(returning: SendableJSResult(value: result)) }
             }
         }
+        return boxed.value
     }
     
     private func drainQueue() {
