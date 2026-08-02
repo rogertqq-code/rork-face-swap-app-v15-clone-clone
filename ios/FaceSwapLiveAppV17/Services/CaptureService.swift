@@ -330,7 +330,7 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         return devices.first(where: { $0.position == position }) ?? devices.first
     }
 
-    private static func availableCameraDevices() -> [AVCaptureDevice] {
+    static func availableCameraDevices() -> [AVCaptureDevice] {
         var deviceTypes: [AVCaptureDevice.DeviceType] = [.builtInWideAngleCamera]
         if #available(iOS 17.0, *) {
             deviceTypes.append(.external)

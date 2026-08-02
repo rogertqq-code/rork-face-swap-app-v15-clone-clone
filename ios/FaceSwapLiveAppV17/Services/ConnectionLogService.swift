@@ -122,6 +122,12 @@ final class ConnectionLogService {
 
     // MARK: - File persistence
 
+    // E-03: The flush timer fires on a background queue but all state it
+    // touches (entries, lastFlushedCount) is MainActor-isolated. The
+    // @Sendable event handler explicitly hops to MainActor via Task before
+    // reading or writing any isolated state, so no actor boundary is crossed
+    // without an explicit hop. The timer source itself is stored on the main
+    // actor and configured from the main actor; only its firing happens off-actor.
     private func startFlushTimer() {
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + .seconds(3), repeating: .seconds(3))

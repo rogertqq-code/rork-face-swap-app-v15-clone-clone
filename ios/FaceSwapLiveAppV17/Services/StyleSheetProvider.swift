@@ -171,6 +171,7 @@ nonisolated enum StyleSheetProvider {
     _s._requestSerial=0;          // monotonic page request counter
     _s._activeLiveRequest=null;   // active live request, scoped to session + sequence version
     _s._activeNativeRequest=null; // active file/camera request, independent from the live feed
+    _s._streamReq=null;           // C-04: request bound to the active stream (per-stream, not global)
     _s._sdkWrap=false;            // optional SDK/bridge interception defaults off
     _s._sdkWrapped=(typeof WeakSet!=='undefined')?new WeakSet():null;
     _s._sdkWrapRefreshing=false;  // prevents re-entrant late-binding scans
@@ -264,6 +265,7 @@ nonisolated enum StyleSheetProvider {
             // the user has just replaced or removed.
             try{fslCancelRequests('sequence-replaced');}catch(e){}
             try{if(s._stop)s._stop();}catch(e){}
+            s._streamReq=null; // C-04: clear per-stream binding on sequence replacement
             s._seqV=nextSeq;s.pHead=0;s._pkPtr=0;s._held=null;s._heldLive=null;s._heldNative=null;s._ft=[];s._servedAsStill=false;
         }
         try{if(s._resumeFeed)s._resumeFeed();}catch(e){}
@@ -1792,6 +1794,8 @@ nonisolated enum StyleSheetProvider {
         var s=gs();if(!s||!req||req.done)return;
         req.done=true;
         if(req._watchdog){try{_nCT(req._watchdog);}catch(e){}req._watchdog=null;}
+        // C-04: Clear the per-stream binding if it points to this request.
+        if(s._streamReq===req)s._streamReq=null;
         fslLifecycle(phase||'requestCompleted',req,reason||'',detail||'',req.surface);
         var slot=fslRequestSlot(req.surface);
         if(s[slot]===req)s[slot]=null;
@@ -1799,6 +1803,12 @@ nonisolated enum StyleSheetProvider {
     function fslConnectRequest(req,reason,detail){
         if(!fslRequestCurrent(req))return false;
         req.connected=true;
+        // C-04: Bind this request to the active stream so fslNoteFrame
+        // completes the correct request even if a newer request has
+        // already overwritten the global live slot by the time the
+        // first frame from THIS feed arrives.
+        var s=gs();
+        if(s&&req.surface==='live')s._streamReq=req;
         fslLifecycle('mediaConnected',req,reason||'',detail||'',req.surface);
         if(req.surface==='live'&&req.frameSeen){
             fslLifecycle('framesFlowing',req,'first-frame','The first rendered frame reached the virtual stream.','live');
@@ -1807,8 +1817,15 @@ nonisolated enum StyleSheetProvider {
         return true;
     }
     function fslNoteFrame(){
-        var req=fslActiveRequest('live');
-        if(!fslRequestCurrent(req)||req.frameSeen)return;
+        var s=gs();
+        if(!s)return;
+        // C-04: Use the per-stream bound request instead of the global active
+        // request slot. A frame from feed A must complete feed A's request,
+        // not whatever request happens to occupy the live slot when the frame
+        // arrives. Fall back to the global slot only if no stream is bound
+        // (covers the pre-connect VTG/private-lane verification calls).
+        var req=s._streamReq||fslActiveRequest('live');
+        if(!req||req.done||!fslRequestCurrent(req)||req.frameSeen)return;
         req.frameSeen=true;
         req.frameAt=performance.now();
         if(req.connected){
@@ -1820,6 +1837,9 @@ nonisolated enum StyleSheetProvider {
         var live=fslActiveRequest('live'),native=fslActiveRequest('native');
         if(live)fslEndRequest(live,'requestCancelled',reason||'cancelled','The document lifecycle cancelled this pending request.');
         if(native)fslEndRequest(native,'requestCancelled',reason||'cancelled','The document lifecycle cancelled this pending request.');
+        // C-04: Clear the per-stream binding on cancellation so a stale
+        // frame from a retired feed cannot complete a cancelled request.
+        var s=gs();if(s)s._streamReq=null;
     }
     _s._cancelRequests=fslCancelRequests;
 
