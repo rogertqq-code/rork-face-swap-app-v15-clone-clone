@@ -109,8 +109,15 @@ nonisolated struct NativeWebRTCSignalEvent: Codable, Sendable, Hashable, Identif
     }
 }
 
+/// `@unchecked Sendable` wrapper for `RTCSessionDescription`, which is not
+/// `Sendable` by default but is safe to transfer once obtained from the SDK.
+nonisolated private struct SendableSDP: @unchecked Sendable {
+    let description: RTCSessionDescription
+}
+
 nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate, @unchecked Sendable {
     typealias EventSink = @Sendable (NativeWebRTCSignalEvent) -> Void
+
 
     let requestID: UUID
 
@@ -123,6 +130,8 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
     private let eventSink: EventSink
     private let stateLock = NSLock()
     private var closed = false
+    private var isRemoteDescriptionSet = false
+    private var pendingIceCandidates: [NativeWebRTCIceCandidate] = []
 
     init(
         requestID: UUID,
@@ -204,17 +213,18 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
             ],
             optionalConstraints: nil
         )
-        let offer: RTCSessionDescription = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RTCSessionDescription, any Error>) in
+        let boxed = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<SendableSDP, any Error>) in
             peerConnection.offer(for: constraints) { description, error in
                 if let error {
                     continuation.resume(throwing: MediaDeliveryContractError.signalingFailed(error.localizedDescription))
                 } else if let description {
-                    continuation.resume(returning: description)
+                    continuation.resume(returning: SendableSDP(description: description))
                 } else {
                     continuation.resume(throwing: MediaDeliveryContractError.signalingFailed("The native peer returned no SDP offer."))
                 }
             }
         }
+        let offer = boxed.description
         try await setLocalDescription(offer)
         return NativeWebRTCSessionDescription(offer)
     }
@@ -229,6 +239,12 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
                     continuation.resume(returning: ())
                 }
             }
+        }
+
+        let pending = drainPendingCandidates()
+
+        for candidate in pending {
+            emit(kind: .localCandidate, candidate: candidate)
         }
     }
 
@@ -249,7 +265,13 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
         sampleBuffer: CMSampleBuffer,
         rotation: RTCVideoRotation = ._0
     ) throws {
-        try ensureOpen()
+        stateLock.lock()
+        defer { stateLock.unlock() }
+
+        if closed {
+            return
+        }
+
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             throw MediaDeliveryContractError.deliveryFailed("The AVFoundation frame did not contain a pixel buffer.")
         }
@@ -295,6 +317,15 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
         }
     }
 
+    private func drainPendingCandidates() -> [NativeWebRTCIceCandidate] {
+        stateLock.lock()
+        isRemoteDescriptionSet = true
+        let pending = pendingIceCandidates
+        pendingIceCandidates.removeAll()
+        stateLock.unlock()
+        return pending
+    }
+
     private func ensureOpen() throws {
         stateLock.lock()
         let isClosed = closed
@@ -338,7 +369,15 @@ nonisolated final class NativeWebRTCSession: NSObject, RTCPeerConnectionDelegate
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {}
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
-        emit(kind: .localCandidate, candidate: NativeWebRTCIceCandidate(candidate))
+        let nativeCandidate = NativeWebRTCIceCandidate(candidate)
+        stateLock.lock()
+        if isRemoteDescriptionSet {
+            stateLock.unlock()
+            emit(kind: .localCandidate, candidate: nativeCandidate)
+        } else {
+            pendingIceCandidates.append(nativeCandidate)
+            stateLock.unlock()
+        }
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {}

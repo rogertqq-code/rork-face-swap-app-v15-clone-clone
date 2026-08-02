@@ -4,6 +4,7 @@ import UIKit
 @globalActor
 actor CaptureSessionActor {
     static let shared = CaptureSessionActor()
+    static let queue = DispatchQueue(label: "com.app.capturesession")
 }
 
 nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
@@ -48,7 +49,7 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
     private let completionLock = NSLock()
 
     private var _currentPosition: AVCaptureDevice.Position = .back
-    private var photoCompletion: ((Result<UIImage, CaptureError>) -> Void)?
+    private var photoCompletion: (@Sendable (Result<UIImage, CaptureError>) -> Void)?
     private var activePhotoID: Int64?
     private var photoTimeoutTask: Task<Void, Never>?
 
@@ -95,6 +96,15 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         if let obs = interruptionObserver { nc.removeObserver(obs) }
         if let obs = interruptionEndedObserver { nc.removeObserver(obs) }
         if let obs = runtimeErrorObserver { nc.removeObserver(obs) }
+        // Ensure the capture session is stopped and the hardware lease is
+        // released even if the caller never invoked stop(). deinit is
+        // synchronous so we dispatch to the session queue and fire-and-forget
+        // the async lease release — both are best-effort cleanup.
+        let captureSession = session
+        CaptureSessionActor.queue.async {
+            if captureSession.isRunning { captureSession.stopRunning() }
+        }
+        Task { await MediaResourceCoordinator.shared.releaseLease(for: "CaptureService") }
     }
 
     private func handleInterruption() {
@@ -182,10 +192,14 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         let newPosition = _currentPosition
         positionLock.unlock()
 
-        Task { await reconfigureForPositionChange() }
-
-        DispatchQueue.main.async { [weak self] in
-            self?.onPositionChanged?(newPosition)
+        // F-01: Defer the position-changed callback until after reconfiguration
+        // completes so the UI reflects the actual hardware state. The name
+        // update in the callback reads the real active device name.
+        Task {
+            await reconfigureForPositionChange()
+            DispatchQueue.main.async { [weak self] in
+                self?.onPositionChanged?(newPosition)
+            }
         }
     }
 
@@ -203,7 +217,7 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         }
     }
 
-    func capturePhoto(completion: @escaping (Result<UIImage, CaptureError>) -> Void) {
+    func capturePhoto(completion: @escaping @Sendable (Result<UIImage, CaptureError>) -> Void) {
         requestVideoAccess { [weak self] granted in
             guard let self else { return }
             guard granted else {
@@ -213,8 +227,9 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
                 return
             }
 
+            let sendableCompletion = completion
             Task {
-                await self.performPhotoCapture(completion: completion)
+                await self.performPhotoCapture(completion: sendableCompletion)
             }
         }
     }
@@ -307,7 +322,7 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
     }
     
     @CaptureSessionActor
-    private func performPhotoCapture(completion: @escaping (Result<UIImage, CaptureError>) -> Void) {
+    private func performPhotoCapture(completion: @escaping @Sendable (Result<UIImage, CaptureError>) -> Void) {
         guard configureSessionSync(), photoOutput.connection(with: .video) != nil else {
             DispatchQueue.main.async {
                 completion(.failure(.configurationFailed))
@@ -401,7 +416,7 @@ nonisolated final class CaptureService: NSObject, AVCaptureVideoDataOutputSample
         return devices.first(where: { $0.position == position }) ?? devices.first
     }
 
-    private static func availableCameraDevices() -> [AVCaptureDevice] {
+    static func availableCameraDevices() -> [AVCaptureDevice] {
         var deviceTypes: [AVCaptureDevice.DeviceType] = [.builtInWideAngleCamera]
         if #available(iOS 17.0, *) {
             deviceTypes.append(.external)

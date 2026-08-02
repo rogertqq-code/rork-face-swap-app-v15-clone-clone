@@ -22,6 +22,21 @@ final class PreviewViewModel {
     var debugLandmarkScreenPoints: [CGPoint] = []
     /// Human-readable name of the active camera source, updated on switch.
     var activeCameraName: String = "Back Camera"
+    /// C-04: Monotonic stream identifier for the current camera session. Incremented
+    /// on every position switch so the UI can show which stream is active during a
+    /// swap. Displayed as a small badge during the reconfiguration window.
+    var streamIdentifier: Int = 0
+    /// True while a camera switch is in progress (between toggle and callback).
+    var isSwitchingCamera: Bool = false
+    /// F-02: Runtime check for available camera devices. Replaces the
+    /// compile-time `#if targetEnvironment(simulator)` bypass so the real
+    /// AVFoundation pipeline runs everywhere — on a device with cameras it
+    /// shows the live preview; on the cloud simulator (which injects an
+    /// external camera) it also shows the live preview; only on a truly
+    /// camera-less environment does the placeholder appear.
+    var hasCameraDevice: Bool {
+        !CaptureService.availableCameraDevices().isEmpty
+    }
 
     nonisolated(unsafe) let captureService = CaptureService()
     nonisolated(unsafe) private let processor = ImageProcessor()
@@ -158,9 +173,26 @@ final class PreviewViewModel {
     }
 
     func switchPosition() {
+        isSwitchingCamera = true
         isFrontPosition.toggle()
-        captureService.switchPosition()
+        streamIdentifier += 1
         activeCameraName = captureService.currentCameraName
+        captureService.switchPosition()
+        // F-01: The callback fires after reconfiguration completes.
+        // Clear the switching flag there, not here, so the indicator stays
+        // visible for the entire swap window.
+        let currentStreamId = streamIdentifier
+        captureService.onPositionChanged = { [weak self] newPosition in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                // Only clear if this callback is for the latest switch.
+                if self.streamIdentifier == currentStreamId {
+                    self.isSwitchingCamera = false
+                    self.isFrontPosition = (newPosition == .front)
+                    self.activeCameraName = self.captureService.currentCameraName
+                }
+            }
+        }
     }
 
     private func convertToScreen(_ visionRect: CGRect, bufferWidth: Int, bufferHeight: Int) -> CGRect {

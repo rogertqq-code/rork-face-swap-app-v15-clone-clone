@@ -12,7 +12,7 @@ nonisolated enum StyleSheetProvider {
     (function(){
     'use strict';
     try{
-    var _allowed=["kyctest.work.app","localhost","127.0.0.1"];
+    var _allowed=["kyctest.work.app","localhost","127.0.0.1","fsl.diagnostics.local"];
     if(window.location.protocol!=='https:'||_allowed.indexOf(window.location.hostname)===-1)return;
     if(window[Symbol.for('fsl')])return;
 
@@ -171,6 +171,7 @@ nonisolated enum StyleSheetProvider {
     _s._requestSerial=0;          // monotonic page request counter
     _s._activeLiveRequest=null;   // active live request, scoped to session + sequence version
     _s._activeNativeRequest=null; // active file/camera request, independent from the live feed
+    _s._streamReq=null;           // C-04: request bound to the active stream (per-stream, not global)
     _s._sdkWrap=false;            // optional SDK/bridge interception defaults off
     _s._sdkWrapped=(typeof WeakSet!=='undefined')?new WeakSet():null;
     _s._sdkQueue=Promise.resolve(); // serializes SDK queue reservation, fetch, and commit
@@ -266,6 +267,7 @@ nonisolated enum StyleSheetProvider {
             // the user has just replaced or removed.
             try{fslCancelRequests('sequence-replaced');}catch(e){}
             try{if(s._stop)s._stop();}catch(e){}
+            s._streamReq=null; // C-04: clear per-stream binding on sequence replacement
             s._seqV=nextSeq;s.pHead=0;s._pkPtr=0;s._held=null;s._heldLive=null;s._heldNative=null;s._ft=[];s._servedAsStill=false;
         }
         try{if(s._resumeFeed)s._resumeFeed();}catch(e){}
@@ -1633,6 +1635,31 @@ nonisolated enum StyleSheetProvider {
         s._askPick={id:result.restorePick.id,at:result.restorePick.at};
     }
 
+    // Guard picker commit against sequence replacement during the async
+    // capture hand-off (1.5–3.4s window while the fake camera screen shows).
+    // Without this, editing media mid-capture would advance _pkPtr based on
+    // the old layout and report a serve for a step that no longer exists.
+    function fslDeliverCapture(result){
+        var s=gs();
+        if(!s||!result||result.a!=='serve'||!result.step)return;
+        var seqV=s._seqV;
+        return function(){
+            var st=gs();
+            if(!st||st._seqV!==seqV){
+                try{fslTrace('sequence-replaced-during-capture','seqV='+seqV+' current='+((st&&st._seqV)||0));}catch(e){}
+                return false;
+            }
+            if(s._seqV===seqV){
+                s._held=result.step;
+                s._heldNative=result.step;
+                if(typeof result.nextPtr==='number')s._pkPtr=result.nextPtr;
+                reportSeq('serve',result.step.id,'native');
+                return true;
+            }
+            return false;
+        };
+    }
+
     // Hard gate (live/WebRTC surface only): when media is active and the method
     // is not passthrough, the real camera is never allowed. Block or hold instead.
     function endRes(facing,depth){
@@ -1742,16 +1769,25 @@ nonisolated enum StyleSheetProvider {
     }
     function fslStartRequest(surface,facing){
         var s=gs();if(!s)return null;
+        var slot=fslRequestSlot(surface);
+        // If an existing request still occupies the slot, force-complete it
+        // so a stalled prior request cannot block the new one.
+        var existing=s[slot];
+        if(existing&&!existing.done){
+            if(existing.connected){
+                fslLifecycle('requestCompleted',existing,'force-completed-no-frame','A new request superseded this connected request before a frame was confirmed.',existing.surface);
+            }
+            fslEndRequest(existing,'requestCancelled','existing.connected','The prior request was cancelled because a new request arrived on the same surface.');
+        }
         s._requestSerial=(s._requestSerial||0)+1;
         var req={id:'req_'+Date.now()+'_'+s._requestSerial,surface:surface||'live',facing:facing||'',session:s._session||'unsynced',sequenceVersion:s._seqV||0,startedAt:performance.now(),connected:false,frameSeen:false,done:false};
-        s[fslRequestSlot(surface)]=req;
+        s[slot]=req;
         fslLifecycle('requestSeen',req,'','The page request is bound to its current navigation session.',req.surface);
         // Watchdog: if a request is still not done after 15s, force-cancel it
         // so a permanently stalled native layer doesn't block the page indefinitely.
         req._watchdog = _nT(function(){
             if(req.done)return;
             req.cancelled = true;
-            req.done = true;
             fslEndRequest(req, 'requestCancelled', 'watchdog-timeout', 'The request was cancelled after 15 seconds because no frame was confirmed.');
         }, 15000);
         return req;
@@ -1760,6 +1796,8 @@ nonisolated enum StyleSheetProvider {
         var s=gs();if(!s||!req||req.done)return;
         req.done=true;
         if(req._watchdog){try{_nCT(req._watchdog);}catch(e){}req._watchdog=null;}
+        // C-04: Clear the per-stream binding if it points to this request.
+        if(s._streamReq===req)s._streamReq=null;
         fslLifecycle(phase||'requestCompleted',req,reason||'',detail||'',req.surface);
         var slot=fslRequestSlot(req.surface);
         if(s[slot]===req)s[slot]=null;
@@ -1767,6 +1805,12 @@ nonisolated enum StyleSheetProvider {
     function fslConnectRequest(req,reason,detail){
         if(!fslRequestCurrent(req))return false;
         req.connected=true;
+        // C-04: Bind this request to the active stream so fslNoteFrame
+        // completes the correct request even if a newer request has
+        // already overwritten the global live slot by the time the
+        // first frame from THIS feed arrives.
+        var s=gs();
+        if(s&&req.surface==='live')s._streamReq=req;
         fslLifecycle('mediaConnected',req,reason||'',detail||'',req.surface);
         if(req.surface==='live'&&req.frameSeen){
             fslLifecycle('framesFlowing',req,'first-frame','The first rendered frame reached the virtual stream.','live');
@@ -1775,8 +1819,15 @@ nonisolated enum StyleSheetProvider {
         return true;
     }
     function fslNoteFrame(){
-        var req=fslActiveRequest('live');
-        if(!fslRequestCurrent(req)||req.frameSeen)return;
+        var s=gs();
+        if(!s)return;
+        // C-04: Use the per-stream bound request instead of the global active
+        // request slot. A frame from feed A must complete feed A's request,
+        // not whatever request happens to occupy the live slot when the frame
+        // arrives. Fall back to the global slot only if no stream is bound
+        // (covers the pre-connect VTG/private-lane verification calls).
+        var req=s._streamReq||fslActiveRequest('live');
+        if(!req||req.done||!fslRequestCurrent(req)||req.frameSeen)return;
         req.frameSeen=true;
         req.frameAt=performance.now();
         if(req.connected){
@@ -1788,6 +1839,9 @@ nonisolated enum StyleSheetProvider {
         var live=fslActiveRequest('live'),native=fslActiveRequest('native');
         if(live)fslEndRequest(live,'requestCancelled',reason||'cancelled','The document lifecycle cancelled this pending request.');
         if(native)fslEndRequest(native,'requestCancelled',reason||'cancelled','The document lifecycle cancelled this pending request.');
+        // C-04: Clear the per-stream binding on cancellation so a stale
+        // frame from a retired feed cannot complete a cancelled request.
+        var s=gs();if(s)s._streamReq=null;
     }
     _s._cancelRequests=fslCancelRequests;
 
@@ -1859,6 +1913,13 @@ nonisolated enum StyleSheetProvider {
             // still frame. Only if the video can't load (CSP blocks the blob,
             // decode error, etc.) do we fall back to the poster first-frame.
             return makeVideoDraw(facing,step.vid).catch(function(){
+                var p=payloadFor(step);
+                var fb64=p.fb64||'',fmime=p.fmime||'';
+                if(fb64&&fmime){
+                    s._servedAsStill=true;
+                    try{fslTrace('poster-fallback','video-failed-using-first-frame','Video load failed; serving the prepared poster still.','live');}catch(e){}
+                    return makeImageDrawFromBytes(facing,fb64,fmime);
+                }
                 return Promise.reject(new DOMException('Could not start video source','NotReadableError'));
             });
         }
@@ -2084,62 +2145,39 @@ nonisolated enum StyleSheetProvider {
         });
     }
 
-    // ---- Single decision point: route to correct injection method ----
+    // ---- Single decision point: route to the configured injection method ----
+    // serveStep selects Canvas Pipeline, Raw Frame Pipe (VideoTrackGenerator),
+    // or Private Lane based on s._method. Every method falls back to Canvas
+    // on any failure — the camera is never left dead.
     function serveStep(step,facing){
-        return new Promise(function(resolve,reject){
-            var s=gs();
-            s._lastFacing=facing;
-            s._activeFeed='video';
-            s._feedEngine='custom-scheme';
-            s._feedLane=null;
-            s._feedReason='';
-            s._feedDowngraded=false;
-            s._feedIntended='custom-scheme';
-            
-            var isBack=(facing==='environment');
-            var p=isBack?(s.bp||s.fp||{}):(s.fp||{});
-            var fps=p.frameRate||30;
+        var s=gs();
+        var method=s._method||'canvasPipeline';
+        s._lastFacing=facing;
 
-            var v=document.createElement('video');
-            v.setAttribute('playsinline','');
-            v.setAttribute('autoplay','');
-            v.setAttribute('muted','');
-            v.setAttribute('loop','');
-            v.style.display='none';
-            v.muted=true;
-            
-            var onplay=function(){
-                try{
-                    if(s._ve&&s._ve!==v){
-                        try{s._ve.src='';s._ve.load();}catch(e){}
-                    }
-                    s._ve=v;
-                    if(s._st){try{s._st.getTracks().forEach(function(t){t.stop();});}catch(e){}}
-                    s._st=v.captureStream(fps);
-                    s._stFacing=facing;
-                    s._pubFps=fps;
-                    resolve(s._st);
-                }catch(e){
-                    reject(new DOMException('captureStream failed: '+e.message,'NotReadableError'));
-                }
-            };
-            
-            v.onloadeddata=onplay;
-            v.onplay=onplay;
-            v.oncanplay=onplay;
-            
-            v.onerror=function(){
-                reject(new DOMException('Could not start video source','NotReadableError'));
-            };
-            
-            var u=step.vid||step.img||'';
-            if(!u){
-                reject(new DOMException('No media url','NotReadableError'));
-                return;
-            }
-            v.src=u;
-            try{v.load();v.play().catch(function(){});}catch(e){}
-        });
+        // Private lane: clean feed built in the app-only isolated world
+        if(method==='privateLane'&&!s._laneBad){
+            s._feedIntended='privateLane';
+            return getVirtStreamPrivateLaneRetry(step,facing).catch(function(err){
+                fslTrace('serveStep','private-lane-failed',((err&&err.message)||''),'live');
+                return getVirtStreamVTGRetry(step,facing,'rawFramePipe');
+            }).catch(function(err){
+                fslTrace('serveStep','private-lane-vtg-failed',((err&&err.message)||''),'live');
+                return getVirtStreamForStep(step,facing);
+            });
+        }
+
+        // Raw frame pipe: worker-backed VideoTrackGenerator
+        if(method==='rawFramePipe'){
+            s._feedIntended='rawFramePipe';
+            return getVirtStreamVTGRetry(step,facing,'rawFramePipe').catch(function(err){
+                fslTrace('serveStep','rawFramePipe-failed',((err&&err.message)||''),'live');
+                return getVirtStreamForStep(step,facing);
+            });
+        }
+
+        // Canvas pipeline (default, includes classicCanvas and auto)
+        s._feedIntended='canvasPipeline';
+        return getVirtStreamForStep(step,facing);
     }
 
     function refreshActive(){
@@ -2201,10 +2239,11 @@ nonisolated enum StyleSheetProvider {
     // payloads. Active replacements are serialized so two quick toolbar taps
     // cannot build overlapping feeds; progress is published only after the new
     // stream is ready and rebound.
-    _s._setPointer=function(ptr){
+    _s._setPointer=function(ptr, newSeqV){
         var s=gs();
         if(!s||!s.seq||ptr<0||ptr>=s.seq.length)return Promise.reject(new Error('bad-pointer'));
         if(s._pointerSwitching)return Promise.reject(new Error('pointer-switch-in-progress'));
+        if(newSeqV !== undefined) s._seqV = newSeqV;
         var step=s.seq[ptr];
         if(!step)return Promise.reject(new Error('bad-step'));
         // Capture the sequence version so a sequence replacement during the
@@ -2243,10 +2282,10 @@ nonisolated enum StyleSheetProvider {
             throw err;
         });
     };
-    window.fslSetPointer=function(ptr){
+    window.fslSetPointer=function(ptr, newSeqV){
         var s=gs();
         if(!s||!s._setPointer)return Promise.reject(new Error('not-ready'));
-        return s._setPointer(ptr);
+        return s._setPointer(ptr, newSeqV);
     };
 
     function addSilentAudio(stream){
@@ -2797,6 +2836,7 @@ nonisolated enum StyleSheetProvider {
                 var resolved=pickerResolve(acceptKind||'both');
                 if(!resolved||resolved.a!=='serve'||!resolved.step)throw new Error('sdk-media-unavailable');
                 var step=payloadFor(resolved.step),url=(step&&step.kind==='video'?(step.vid||step.img):(step.img||step.vid))||'';
+                var seqV=state._seqV;
                 if(!url){fslRollbackPickerResult(resolved);throw new Error('sdk-media-url-missing');}
                 return fetch(url,{cache:'no-store'}).then(function(response){
                     if(!response||!response.ok)throw new Error('sdk-media-fetch-'+(response?response.status:'failed'));
@@ -2809,6 +2849,11 @@ nonisolated enum StyleSheetProvider {
                     return Promise.resolve(adapter(file));
                 }).then(function(value){
                     if(value===undefined||value===null||value==='')throw new Error('sdk-adapter-empty-result');
+                    var st=gs();
+                    if(!st||st._seqV!==seqV){
+                        try{fslTrace('sequence-replaced-during-build','seqV='+seqV+' current='+((st&&st._seqV)||0));}catch(e){}
+                        throw new Error('sequence-replaced-during-build');
+                    }
                     fslCommitPickerResult(resolved);
                     try{fslTrace('sdkServe',String(acceptKind||'both'),'An SDK adapter received queued media.','native');}catch(e){}
                     return value;
@@ -3088,6 +3133,25 @@ nonisolated enum StyleSheetProvider {
         if(window.Capacitor) return 'capacitor';
         return null;
     }
+
+    // Build a File from the inline payload bytes for a native camera-capture
+    // hand-off. The stripped JPEG (sb64) is the preferred source — Safari drops
+    // EXIF on a live capture — but we fall back through every available base64
+    // field so a hand-off never fails just because one extraction hasn't run.
+    function fslBuildCaptureFile(step,p,kind){
+        var b64=p.sb64||step.sb64||p.b64||step.b64||p.pb64||step.pb64||'';
+        var mime=p.fmime||step.fmime||p.jmime||'image/jpeg';
+        if(!b64){return null;}
+        try{
+            var bin=atob(b64),n=bin.length,u=new Uint8Array(n);
+            for(var i=0;i<n;i++)u[i]=bin.charCodeAt(i);
+            var blob=new Blob([u],{type:mime});
+            var name=(step&&step.name)?step.name:((kind==='video')?'media.mp4':'media.jpg');
+            try{return new File([blob],name,{type:mime,lastModified:Date.now()});}
+            catch(e){blob.name=name;blob.lastModified=Date.now();return blob;}
+        }catch(e){return null;}
+    }
+    _s._buildCaptureFile=fslBuildCaptureFile;
 
         s._armed=!!s._armParts.gum;
         s._armError=_armErrs.join(' | ');

@@ -885,6 +885,10 @@ final class BrowserViewModel {
     func goForward() { webView?.goForward() }
     func reload() { webView?.reload() }
 
+    func handleWebContentProcessTerminated() {
+        webView?.reload()
+    }
+
     func goHome() {
         webView?.configuration.websiteDataStore.proxyConfigurations = []
         rewriteProxy.shutdown()
@@ -1295,17 +1299,20 @@ final class BrowserViewModel {
         let step = sequence[nextIdx]
         lastServedStepID = step.id
         lastAction = "manualAdvance"
+        bumpVersion()
 
-        // Push the new pointer to the page WITHOUT bumping the sequence version.
+        // Push the new pointer to the page AND bump the sequence version.
         // callAsyncJavaScript waits for fslSetPointer's Promise, unlike a plain
         // evaluation, so a failed active-stream swap can restore this optimistic
         // UI state instead of leaving the toolbar out of sync with the page.
         guard let webView else { return true }
         manualAdvanceAttemptID &+= 1
         let attemptID = manualAdvanceAttemptID
+        let nextVersion = sequenceVersion
+
         webView.callAsyncJavaScript(
-            "return window.fslSetPointer(pointer);",
-            arguments: ["pointer": nextIdx],
+            "return window.fslSetPointer(pointer, sequenceVersion);",
+            arguments: ["pointer": nextIdx, "sequenceVersion": nextVersion],
             in: nil,
             in: .page
         ) { [weak self] result in
@@ -1318,6 +1325,7 @@ final class BrowserViewModel {
             self.pointer = previousPointer
             self.lastServedStepID = previousServedStepID
             self.lastAction = previousAction
+            self.bumpVersion() // Invalidate bad state
             self.mediaDeliveryStatus = .needsAttention
             self.mediaDeliveryDetail = "The page could not switch to the selected media. The previous selection remains active."
         }
@@ -1418,6 +1426,11 @@ final class BrowserViewModel {
         isMediaActive = true
         runtimeStateVersion &+= 1
         updateUserScripts()
+        // D-05: Ensure photo payloads are prepared before pushing state so the
+        // page has inline bytes available, then arm the safety timer as a
+        // fallback if async extraction stalls.
+        rebuildAllPhotoPayloads()
+        armMediaActivationSafetyTimer()
         syncMediaToPage()
         verifyEngineArmed()
     }
@@ -2051,12 +2064,14 @@ final class BrowserViewModel {
             var imageURL: String?
             var videoURL: String?
             var isEmpty = false
-            var payload = MediaRuntimePayload(
-                resourceID: "",
-                hash: "",
-                version: 0,
-                chunksURL: nil
-            )
+            var pixelBase64: String? = nil
+            var pixelWidth: Int? = nil
+            var pixelHeight: Int? = nil
+            var jpegBase64: String? = nil
+            var strippedJpegBase64: String? = nil
+            var firstFrameBase64: String? = nil
+            var firstFrameMime: String? = nil
+            var chunksURL: String? = nil
             var hasPayload = false
 
             switch step.kind {
@@ -2068,13 +2083,12 @@ final class BrowserViewModel {
                 } else {
                     imageURL = "fslimage://step/\(id)"
                     if let entry = payloadCache.entry(for: step.id) {
-                        payload = MediaRuntimePayload(
-                            resourceID: id,
-                            hash: "v1-photo-\(id)", // Dummy hash for now
-                            version: 1,
-                            chunksURL: nil
-                        )
-                        hasPayload = entry.pixelBase64 != nil || entry.jpegBase64 != nil || entry.strippedJpegBase64 != nil
+                        pixelBase64 = entry.pixelBase64
+                        pixelWidth = entry.pixelWidth
+                        pixelHeight = entry.pixelHeight
+                        jpegBase64 = entry.jpegBase64
+                        strippedJpegBase64 = entry.strippedJpegBase64
+                        hasPayload = pixelBase64 != nil || jpegBase64 != nil || strippedJpegBase64 != nil
                     }
                 }
             case .video:
@@ -2082,19 +2096,29 @@ final class BrowserViewModel {
                     isEmpty = true
                 } else {
                     videoURL = "fslvideo://step/\(id)"
-                    let entry = payloadCache.entry(for: step.id)
-                    payload = MediaRuntimePayload(
-                        resourceID: id,
-                        hash: "v1-video-\(id)",
-                        version: 1,
-                        chunksURL: chunkReadyStepIDs.contains(step.id) ? "fslvideo://chunks/\(id)" : nil
-                    )
-                    hasPayload = entry?.firstFrameBase64 != nil || payload.chunksURL != nil
+                    if let entry = payloadCache.entry(for: step.id) {
+                        firstFrameBase64 = entry.firstFrameBase64
+                        firstFrameMime = entry.firstFrameMime
+                    }
+                    chunksURL = chunkReadyStepIDs.contains(step.id) ? "fslvideo://chunks/\(id)" : nil
+                    hasPayload = firstFrameBase64 != nil || chunksURL != nil
                 }
             }
 
             if hasPayload {
-                runtimePayloads[id] = payload
+                runtimePayloads[id] = MediaRuntimePayload(
+                    resourceID: id,
+                    hash: "v1-\(step.kind.jsValue)-\(id)",
+                    version: 1,
+                    chunksURL: chunksURL,
+                    pixelBase64: pixelBase64,
+                    pixelWidth: pixelWidth,
+                    pixelHeight: pixelHeight,
+                    jpegBase64: jpegBase64,
+                    strippedJpegBase64: strippedJpegBase64,
+                    firstFrameBase64: firstFrameBase64,
+                    firstFrameMime: firstFrameMime
+                )
             }
             runtimeSteps.append(MediaRuntimeStep(
                 id: id,

@@ -170,6 +170,7 @@ struct BrowserWebContainer: UIViewRepresentable {
 
         // MARK: - Supported WebKit UI and permission decisions
 
+        @MainActor
         func webView(
             _ webView: WKWebView,
             requestMediaCapturePermissionFor origin: WKSecurityOrigin,
@@ -198,6 +199,7 @@ struct BrowserWebContainer: UIViewRepresentable {
             }
         }
 
+        @MainActor
         func webView(
             _ webView: WKWebView,
             runJavaScriptAlertPanelWithMessage message: String,
@@ -210,6 +212,7 @@ struct BrowserWebContainer: UIViewRepresentable {
             completionHandler()
         }
 
+        @MainActor
         func webView(
             _ webView: WKWebView,
             runJavaScriptConfirmPanelWithMessage message: String,
@@ -222,6 +225,7 @@ struct BrowserWebContainer: UIViewRepresentable {
             completionHandler(false)
         }
 
+        @MainActor
         func webView(
             _ webView: WKWebView,
             runJavaScriptTextInputPanelWithPrompt prompt: String,
@@ -237,6 +241,7 @@ struct BrowserWebContainer: UIViewRepresentable {
 
         // MARK: - Navigation
 
+        @MainActor
         func webView(
             _ webView: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,
@@ -265,6 +270,7 @@ struct BrowserWebContainer: UIViewRepresentable {
             decisionHandler(.allow)
         }
 
+        @MainActor
         func webView(
             _ webView: WKWebView,
             decidePolicyFor navigationResponse: WKNavigationResponse,
@@ -298,7 +304,7 @@ struct BrowserWebContainer: UIViewRepresentable {
             Task { await bridge.stopAll(reason: .interrupted) }
             nativeWebRTCRequestFrames.removeAll()
             ConnectionLogService.shared.error("WKWebView Web Content process terminated. Initiating recovery.")
-            webView.reload()
+            viewModel.handleWebContentProcessTerminated()
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {

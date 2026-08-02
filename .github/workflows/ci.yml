@@ -72,8 +72,7 @@ jobs:
 
       - name: Build and test
         run: |
-          set -o pipefail
-          xcodebuild \
+          set -o pipefail && xcodebuild clean build test \
             -project ios/FaceSwapLiveAppV17.xcodeproj \
             -scheme FaceSwapLiveAppV17 \
             -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}" \
@@ -82,7 +81,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             SWIFT_VERSION=6.0 \
             SWIFT_STRICT_CONCURRENCY=complete \
-            test | xcpretty
+            | xcpretty
 
       - name: Upload test result bundle
         if: always()

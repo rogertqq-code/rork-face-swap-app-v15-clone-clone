@@ -144,11 +144,25 @@ nonisolated struct MediaRuntimePayload: Codable, Sendable {
     let hash: String
     let version: Int
     let chunksURL: String?
+    let pixelBase64: String?
+    let pixelWidth: Int?
+    let pixelHeight: Int?
+    let jpegBase64: String?
+    let strippedJpegBase64: String?
+    let firstFrameBase64: String?
+    let firstFrameMime: String?
 
     enum CodingKeys: String, CodingKey {
         case resourceID = "rid"
         case hash = "hsh"
         case version = "v"
         case chunksURL = "chk"
+        case pixelBase64 = "pb64"
+        case pixelWidth = "pw"
+        case pixelHeight = "ph"
+        case jpegBase64 = "b64"
+        case strippedJpegBase64 = "sb64"
+        case firstFrameBase64 = "fb64"
+        case firstFrameMime = "fmime"
     }
 }

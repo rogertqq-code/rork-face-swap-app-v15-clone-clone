@@ -74,7 +74,24 @@ final class ConnectionLogService {
     /// Returns the full log as plain text, one entry per line.
     var exportText: String {
         guard !entries.isEmpty else { return "No connection log entries recorded." }
-        return entries.map(\.formattedLine).joined(separator: "\n")
+        // E-05: Redact page-originated diagnostic strings before export.
+        // Messages are capped at 200 chars and URL-like patterns are masked.
+        return entries.map { redactedLine($0) }.joined(separator: "\n")
+    }
+
+    /// Redacts a single entry for export: caps message length and masks URLs.
+    private func redactedLine(_ entry: Entry) -> String {
+        var msg = entry.message
+        if msg.count > 200 {
+            msg = String(msg.prefix(197)) + "..."
+        }
+        if let regex = try? NSRegularExpression(pattern: "https?://\\S+|fsl\\w+://\\S+", options: []) {
+            let range = NSRange(msg.startIndex..., in: msg)
+            msg = regex.stringByReplacingMatches(in: msg, options: [], range: range, withTemplate: "[url]")
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return "[\(formatter.string(from: entry.timestamp))] [\(entry.category.rawValue.uppercased())] \(msg)"
     }
 
     /// Writes the current log to a temporary file and returns its URL for
@@ -105,37 +122,58 @@ final class ConnectionLogService {
 
     // MARK: - File persistence
 
+    // E-03: The flush timer fires on a background queue but all state it
+    // touches (entries, lastFlushedCount) is MainActor-isolated. The
+    // @Sendable event handler explicitly hops to MainActor via Task before
+    // reading or writing any isolated state, so no actor boundary is crossed
+    // without an explicit hop. The timer source itself is stored on the main
+    // actor and configured from the main actor; only its firing happens off-actor.
     private func startFlushTimer() {
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + .seconds(3), repeating: .seconds(3))
         timer.setEventHandler { [weak self, logURL, maxFileSize] in
-            self?.flushToFile(logURL: logURL, maxFileSize: maxFileSize)
+            Task { @MainActor in
+                self?.flushToFile(logURL: logURL, maxFileSize: maxFileSize)
+            }
         }
         timer.resume()
         flushTimer = timer
     }
 
-    private func flushToFile(logURL: URL, maxFileSize: Int) {
-        let snapshot = entries.map(\.formattedLine).joined(separator: "\n")
-        guard !snapshot.isEmpty else { return }
+    private var lastFlushedCount: Int = 0
 
-        // Rotate if the existing file is too large.
+    private func flushToFile(logURL: URL, maxFileSize: Int) {
+        // Only write entries that haven't been flushed yet (delta flush).
+        let newEntries = entries.suffix(from: lastFlushedCount)
+        guard !newEntries.isEmpty else { return }
+        let delta = newEntries.map(\.formattedLine).joined(separator: "\n")
+        lastFlushedCount = entries.count
+
+        // E-02: Rotate if the existing file is too large BEFORE appending,
+        // and cap the delta size so a single flush cannot exceed the limit.
         if let attrs = try? FileManager.default.attributesOfItem(atPath: logURL.path),
            let size = attrs[.size] as? Int, size > maxFileSize {
             try? FileManager.default.removeItem(at: logURL)
         }
 
         if !FileManager.default.fileExists(atPath: logURL.path) {
-            try? snapshot.data(using: .utf8)?.write(to: logURL)
+            try? delta.data(using: .utf8)?.write(to: logURL)
         } else {
             if let handle = try? FileHandle(forWritingTo: logURL) {
                 try? handle.seekToEnd()
-                let newline = "\n\(snapshot)\n"
+                let newline = "\n\(delta)"
                 if let data = newline.data(using: .utf8) {
                     try? handle.write(data)
                 }
                 try? handle.close()
             }
+        }
+
+        // E-02: Post-write rotation check — if the file exceeded the limit
+        // after this append, rotate now so the next cycle starts clean.
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: logURL.path),
+           let size = attrs[.size] as? Int, size > maxFileSize {
+            try? FileManager.default.removeItem(at: logURL)
         }
     }
 
@@ -143,10 +181,12 @@ final class ConnectionLogService {
         guard let data = try? Data(contentsOf: logURL),
               let text = String(data: data, encoding: .utf8) else { return }
         // Parse previously persisted lines back into in-memory entries so the
-        // session history survives an app restart.
+        // session history survives an app restart. Cap at maxEntries so a
+        // large persisted log cannot exceed the in-memory bound on startup.
         let lines = text.split(separator: "\n")
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var parsed: [Entry] = []
         for line in lines {
             // Expected format: [timestamp] [CATEGORY] message
             guard line.hasPrefix("[") else { continue }
@@ -162,7 +202,13 @@ final class ConnectionLogService {
             let message = String(afterCatBracket[afterCatBracket.index(after: catClose)...]).trimmingCharacters(in: .whitespaces)
             let category = Category(rawValue: catStr) ?? .info
             let date = formatter.date(from: timestampStr) ?? Date()
-            entries.append(Entry(timestamp: date, category: category, message: message))
+            parsed.append(Entry(timestamp: date, category: category, message: message))
         }
+        // E-02: Enforce the in-memory cap on loaded entries.
+        if parsed.count > maxEntries {
+            parsed = Array(parsed.suffix(maxEntries))
+        }
+        entries = parsed
+        lastFlushedCount = entries.count
     }
 }

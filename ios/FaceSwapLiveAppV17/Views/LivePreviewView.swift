@@ -70,21 +70,21 @@ struct LivePreviewView: View {
             ZStack {
                 Color.black
 
-                #if targetEnvironment(simulator)
-                simulatorPlaceholder
-                #else
-                MediaPreviewView(session: viewModel.captureService.session)
+                if viewModel.hasCameraDevice {
+                    MediaPreviewView(session: viewModel.captureService.session)
 
-                if let overlay = viewModel.overlayImage,
-                   viewModel.isActive,
-                   viewModel.detectedRect.width > 0 {
-                    overlayView(overlay)
-                }
+                    if let overlay = viewModel.overlayImage,
+                       viewModel.isActive,
+                       viewModel.detectedRect.width > 0 {
+                        overlayView(overlay)
+                    }
 
-                if viewModel.showDebugOverlay, viewModel.detectedRect.width > 0 {
-                    debugOverlayCanvas
+                    if viewModel.showDebugOverlay, viewModel.detectedRect.width > 0 {
+                        debugOverlayCanvas
+                    }
+                } else {
+                    simulatorPlaceholder
                 }
-                #endif
             }
             .onAppear { viewModel.viewSize = geo.size }
             .onChange(of: geo.size) { _, size in viewModel.viewSize = size }
@@ -244,10 +244,22 @@ struct LivePreviewView: View {
     /// preview. Tapping it switches the camera (same as the flip button).
     private var cameraSourceBadge: some View {
         HStack(spacing: 6) {
-            Image(systemName: viewModel.isFrontPosition ? "person.crop.circle.fill" : "camera.aperture")
-                .font(.system(size: 11, weight: .semibold))
+            if viewModel.isSwitchingCamera {
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .frame(width: 14, height: 14)
+                    .tint(.white)
+            } else {
+                Image(systemName: viewModel.isFrontPosition ? "person.crop.circle.fill" : "camera.aperture")
+                    .font(.system(size: 11, weight: .semibold))
+            }
             Text(viewModel.activeCameraName)
                 .font(.system(size: 12, weight: .semibold))
+            if viewModel.isSwitchingCamera {
+                Text("stream #\(viewModel.streamIdentifier)")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 12)
@@ -255,7 +267,7 @@ struct LivePreviewView: View {
         .background(.ultraThinMaterial, in: Capsule())
         .overlay {
             Capsule()
-                .stroke(.white.opacity(0.15), lineWidth: 0.5)
+                .stroke(viewModel.isSwitchingCamera ? Color.yellow.opacity(0.5) : .white.opacity(0.15), lineWidth: 0.5)
         }
         .onTapGesture {
             viewModel.switchPosition()
@@ -265,6 +277,7 @@ struct LivePreviewView: View {
         .padding(.top, 8)
         .animation(.spring(duration: 0.3), value: viewModel.activeCameraName)
         .animation(.spring(duration: 0.3), value: viewModel.isFrontPosition)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.isSwitchingCamera)
         .accessibilityIdentifier("preview.camera.position")
         .accessibilityValue(viewModel.activeCameraName)
     }
