@@ -117,9 +117,14 @@ final class ConnectionLogService {
         flushTimer = timer
     }
 
+    private var lastFlushedCount: Int = 0
+
     private func flushToFile(logURL: URL, maxFileSize: Int) {
-        let snapshot = entries.map(\.formattedLine).joined(separator: "\n")
-        guard !snapshot.isEmpty else { return }
+        // Only write entries that haven't been flushed yet (delta flush).
+        let newEntries = entries.suffix(from: lastFlushedCount)
+        guard !newEntries.isEmpty else { return }
+        let delta = newEntries.map(\.formattedLine).joined(separator: "\n")
+        lastFlushedCount = entries.count
 
         // Rotate if the existing file is too large.
         if let attrs = try? FileManager.default.attributesOfItem(atPath: logURL.path),
@@ -128,11 +133,11 @@ final class ConnectionLogService {
         }
 
         if !FileManager.default.fileExists(atPath: logURL.path) {
-            try? snapshot.data(using: .utf8)?.write(to: logURL)
+            try? delta.data(using: .utf8)?.write(to: logURL)
         } else {
             if let handle = try? FileHandle(forWritingTo: logURL) {
                 try? handle.seekToEnd()
-                let newline = "\n\(snapshot)\n"
+                let newline = "\n\(delta)"
                 if let data = newline.data(using: .utf8) {
                     try? handle.write(data)
                 }

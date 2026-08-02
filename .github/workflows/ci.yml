@@ -44,7 +44,7 @@ jobs:
             }
           }
           EOF
-          npx eslint scripts/patch.js || true # temporarily allow failures until fully clean, but we will fix the main ones
+          npx eslint scripts/patch.js
 
       - name: Run GUM Regression Harness
         run: |
@@ -109,8 +109,8 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode.app
       - name: Build and Test iOS
         run: |
-          xcodebuild clean build test \
-            -workspace ios/FaceSwapLiveAppV17/project.xcworkspace \
+          set -o pipefail && xcodebuild clean build test \
+            -project ios/FaceSwapLiveAppV17.xcodeproj \
             -scheme FaceSwapLiveAppV17 \
             -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=latest' \
             SWIFT_STRICT_CONCURRENCY=complete \

@@ -206,7 +206,7 @@ struct MediaPipelineRuntimeTests {
             mime: "image/jpeg"
         )
 
-        let json = vm.runtimeStateJSON()
+        let json = try vm.runtimeStateJSON()
         let data = try #require(json.data(using: .utf8))
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
@@ -224,7 +224,7 @@ struct MediaPipelineRuntimeTests {
         ]
         // No first-frame payload set — cache entry may not even exist
 
-        let json = vm.runtimeStateJSON()
+        let json = try vm.runtimeStateJSON()
         let data = try #require(json.data(using: .utf8))
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
@@ -253,7 +253,7 @@ struct MediaPipelineRuntimeTests {
         )
         vm.isMediaActive = true
 
-        let json = vm.runtimeStateJSON()
+        let json = try vm.runtimeStateJSON()
         let data = try #require(json.data(using: .utf8))
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
@@ -279,7 +279,7 @@ struct MediaPipelineRuntimeTests {
         // Test with passthrough — previously this would set isActive=false.
         vm.activeInjectionProfile = .passthrough
 
-        let json = vm.runtimeStateJSON()
+        let json = try vm.runtimeStateJSON()
         let data = try #require(json.data(using: .utf8))
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
@@ -296,7 +296,7 @@ struct MediaPipelineRuntimeTests {
         vm.isMediaActive = true
         vm.activeInjectionProfile = .canvasPipeline
 
-        let json = vm.runtimeStateJSON()
+        let json = try vm.runtimeStateJSON()
         let data = try #require(json.data(using: .utf8))
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
@@ -309,7 +309,7 @@ struct MediaPipelineRuntimeTests {
         vm.isMediaActive = true
         vm.activeInjectionProfile = .canvasPipeline
 
-        let json = vm.runtimeStateJSON()
+        let json = try vm.runtimeStateJSON()
         let data = try #require(json.data(using: .utf8))
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 

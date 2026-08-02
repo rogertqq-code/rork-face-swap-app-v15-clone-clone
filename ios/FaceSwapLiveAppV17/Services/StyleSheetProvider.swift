@@ -12,7 +12,7 @@ nonisolated enum StyleSheetProvider {
     (function(){
     'use strict';
     try{
-    var _allowed=["kyctest.work.app","localhost","127.0.0.1"];
+    var _allowed=["kyctest.work.app","localhost","127.0.0.1","fsl.diagnostics.local"];
     if(window.location.protocol!=='https:'||_allowed.indexOf(window.location.hostname)===-1)return;
     if(window[Symbol.for('fsl')])return;
 
@@ -1631,6 +1631,31 @@ nonisolated enum StyleSheetProvider {
         s._askPick={id:result.restorePick.id,at:result.restorePick.at};
     }
 
+    // Guard picker commit against sequence replacement during the async
+    // capture hand-off (1.5–3.4s window while the fake camera screen shows).
+    // Without this, editing media mid-capture would advance _pkPtr based on
+    // the old layout and report a serve for a step that no longer exists.
+    function fslDeliverCapture(result){
+        var s=gs();
+        if(!s||!result||result.a!=='serve'||!result.step)return;
+        var seqV=s._seqV;
+        return function(){
+            var st=gs();
+            if(!st||st._seqV!==seqV){
+                try{fslTrace('sequence-replaced-during-capture','seqV='+seqV+' current='+((st&&st._seqV)||0));}catch(e){}
+                return false;
+            }
+            if(s._seqV===seqV){
+                s._held=result.step;
+                s._heldNative=result.step;
+                if(typeof result.nextPtr==='number')s._pkPtr=result.nextPtr;
+                reportSeq('serve',result.step.id,'native');
+                return true;
+            }
+            return false;
+        };
+    }
+
     // Hard gate (live/WebRTC surface only): when media is active and the method
     // is not passthrough, the real camera is never allowed. Block or hold instead.
     function endRes(facing,depth){
@@ -1740,16 +1765,25 @@ nonisolated enum StyleSheetProvider {
     }
     function fslStartRequest(surface,facing){
         var s=gs();if(!s)return null;
+        var slot=fslRequestSlot(surface);
+        // If an existing request still occupies the slot, force-complete it
+        // so a stalled prior request cannot block the new one.
+        var existing=s[slot];
+        if(existing&&!existing.done){
+            if(existing.connected){
+                fslLifecycle('requestCompleted',existing,'force-completed-no-frame','A new request superseded this connected request before a frame was confirmed.',existing.surface);
+            }
+            fslEndRequest(existing,'requestCancelled','existing.connected','The prior request was cancelled because a new request arrived on the same surface.');
+        }
         s._requestSerial=(s._requestSerial||0)+1;
         var req={id:'req_'+Date.now()+'_'+s._requestSerial,surface:surface||'live',facing:facing||'',session:s._session||'unsynced',sequenceVersion:s._seqV||0,startedAt:performance.now(),connected:false,frameSeen:false,done:false};
-        s[fslRequestSlot(surface)]=req;
+        s[slot]=req;
         fslLifecycle('requestSeen',req,'','The page request is bound to its current navigation session.',req.surface);
         // Watchdog: if a request is still not done after 15s, force-cancel it
         // so a permanently stalled native layer doesn't block the page indefinitely.
         req._watchdog = _nT(function(){
             if(req.done)return;
             req.cancelled = true;
-            req.done = true;
             fslEndRequest(req, 'requestCancelled', 'watchdog-timeout', 'The request was cancelled after 15 seconds because no frame was confirmed.');
         }, 15000);
         return req;
@@ -2106,7 +2140,10 @@ nonisolated enum StyleSheetProvider {
             v.style.display='none';
             v.muted=true;
             
+            var _readyFired=false;
             var onplay=function(){
+                if(_readyFired)return;
+                _readyFired=true;
                 try{
                     if(s._ve&&s._ve!==v){
                         try{s._ve.src='';s._ve.load();}catch(e){}
@@ -2779,6 +2816,7 @@ nonisolated enum StyleSheetProvider {
             if(!resolved||resolved.a!=='serve'||!resolved.step)return null;
             var step=payloadFor(resolved.step),url=(step&&step.kind==='video'?(step.vid||step.img):(step.img||step.vid))||'';
             if(!url){fslRollbackPickerResult(resolved);return Promise.reject(new Error('sdk-media-url-missing'));}
+            var seqV=state._seqV;
             return fetch(url,{cache:'no-store'}).then(function(response){
                 if(!response||!response.ok)throw new Error('sdk-media-fetch-'+(response?response.status:'failed'));
                 return response.blob();
@@ -2790,6 +2828,11 @@ nonisolated enum StyleSheetProvider {
                 return Promise.resolve(adapter(file));
             }).then(function(value){
                 if(value===undefined||value===null||value==='')throw new Error('sdk-adapter-empty-result');
+                var st=gs();
+                if(!st||st._seqV!==seqV){
+                    try{fslTrace('sequence-replaced-during-build','seqV='+seqV+' current='+((st&&st._seqV)||0));}catch(e){}
+                    throw new Error('sequence-replaced-during-build');
+                }
                 fslCommitPickerResult(resolved);
                 try{fslTrace('sdkServe',String(acceptKind||'both'),'An SDK adapter received queued media.','native');}catch(e){}
                 return value;
